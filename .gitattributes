@@ -1,0 +1,11 @@
+# Normalize text files to LF in the repository
+* text=auto eol=lf
+
+# Source datasets must stay byte-for-byte identical to the supplied files
+data/input/*.csv -text
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bia Energy — Design System v3 · edición Energy Management</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
+  <style>
+    /* ============================================================
+       BIA ENERGY — DESIGN SYSTEM v3 (edición Energy Management)
+       Referencia visual canónica. Conserva el lenguaje de la v3
+       original (navy #1E3A5F como primary, Plus Jakarta Sans,
+       radios amplios, sombras suaves, aire) y lo adapta al
+       dominio de gestión energética.
+       Contrato de implementación: docs/design/design-system.md
+       Los datos de la simulación son ILUSTRATIVOS.
+       ============================================================ */
+    :root {
+      /* Marca — navy es el primary interactivo */
+      --brand-primary:        #1e3a5f;
+      --brand-primary-hover:  #16314f;
+      --brand-primary-active: #0f2238;
+      --brand-primary-soft:   #eaeff5;
+      --brand-primary-ring:   rgba(30, 58, 95, .28);
+      --navy:                 #1e3a5f;
+      --navy-900:             #0f2238;
+
+      /* Acentos de apoyo (jerarquía y gráficas, no acciones) */
+      --accent-mint:   #10b981; --accent-mint-soft:   #e6f7f1;
+      --accent-sky:    #0ea5e9; --accent-sky-soft:    #e6f5fd;
+      --accent-violet: #6366f1; --accent-violet-soft: #eef0fe;
+      --accent-amber:  #f59e0b; --accent-amber-soft:  #fef3e2;
+
+      /* Neutrales (text-muted oscurecido para contraste AA) */
+      --color-heading:      #11203a;
+      --color-text:         #28324a;
+      --color-text-muted:   #5d6880;
+      --color-text-subtle:  #9aa3b8;   /* solo placeholders y decoración, nunca texto informativo */
+      --color-border:       #e7eaf2;
+      --color-border-strong:#d4d9e6;
+      --page-bg:            #f5f6fb;
+      --surface:            #ffffff;
+      --surface-muted:      #f3f5fa;
+
+      /* Semántica Energy Management (texto ≥ 4.5:1 sobre su fondo suave) */
+      --normal:        #0f766e; --normal-soft:        #e3f4f1;
+      --informational: #1e3a5f; --informational-soft: #eaeff5;
+      --warning:       #8a6100; --warning-soft:       #fcf2dd;
+      --critical:      #9f1239; --critical-soft:      #fdecef;
+      --data-quality:  #4f46e5; --data-quality-soft:  #eef0fe;
+      --neutral:       #5d6880; --neutral-soft:       #f3f5fa;
+
+      /* Destructivo: SOLO acciones destructivas y errores del sistema */
+      --destructive:      #dc2626;
+      --destructive-text: #b91c1c;
+      --destructive-soft: #fdecec;
+
+      /* Gráficas */
+      --chart-series:        var(--navy);
+      --chart-baseline-band: rgba(30, 58, 95, .12);
+      --chart-anomaly:       rgba(159, 18, 57, .08);
+      --chart-grid:          #e7eaf2;
+      --chart-axis:          #5d6880;
+
+      /* Radios, sombras, tipografía */
+      --radius-sm: 10px; --radius-md: 14px; --radius-lg: 20px; --radius-xl: 26px;
+      --shadow-xs: 0 1px 2px rgba(17,32,58,.05);
+      --shadow-sm: 0 2px 6px rgba(17,32,58,.06);
+      --shadow-md: 0 6px 20px rgba(17,32,58,.07);
+      --shadow-lg: 0 18px 44px rgba(17,32,58,.12);
+      --font-sans: "Plus Jakarta Sans", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--page-bg); color: var(--color-text);
+      font-family: var(--font-sans); line-height: 1.55; -webkit-font-smoothing: antialiased;
+    }
+    .num { font-variant-numeric: tabular-nums; }
+    code { font-size: .85em; overflow-wrap: anywhere; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    .skip-link { position: absolute; left: 1rem; top: -3rem; background: var(--brand-primary); color: #fff; padding: .6rem 1rem; border-radius: 10px; font-weight: 700; z-index: 10; }
+    .skip-link:focus { top: 1rem; }
+
+    /* Foco visible en todos los elementos interactivos */
+    :where(a, button, input, select, summary, [tabindex]):focus-visible { outline: 3px solid var(--brand-primary); outline-offset: 2px; }
+    .shell-aside :where(a, button):focus-visible { outline-color: #fff; }
+
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 2.75rem 1.5rem 6rem; }
+
+    header.hero { margin-bottom: 2.75rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    header.hero h1 { font-size: 2.1rem; font-weight: 800; color: var(--color-heading); margin: 0 0 .3rem; letter-spacing: -.02em; }
+    header.hero p { color: var(--color-text-muted); margin: 0; max-width: 62ch; }
+    .pill-tag { font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+                color: var(--brand-primary); background: var(--brand-primary-soft); padding: .4rem .8rem; border-radius: 999px; white-space: nowrap; }
+
+    section { margin-top: 3.25rem; }
+    h2.section-title {
+      font-size: 1.3rem; font-weight: 700; color: var(--color-heading); letter-spacing: -.01em;
+      padding-bottom: .55rem; margin: 0 0 1.4rem; position: relative;
+    }
+    h2.section-title::after { content: ""; position: absolute; left: 0; bottom: 0; width: 44px; height: 3px; border-radius: 3px; background: var(--brand-primary); }
+    h3.sub { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--color-text-muted); margin: 1.6rem 0 .85rem; }
+    .lead { color: var(--color-text-muted); margin: -.6rem 0 1.2rem; max-width: 75ch; font-size: .92rem; }
+
+    /* ===== Shell (sidebar + main) ===== */
+    .shell { display: grid; grid-template-columns: 232px 1fr; background: var(--surface); border: 1px solid var(--color-border);
+             border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); overflow: hidden; }
+    .shell-aside { background: linear-gradient(180deg, var(--navy) 0%, var(--navy-900) 100%); color: #cdd6e6; padding: 1.25rem 1rem; display: flex; flex-direction: column; }
+    .shell-brand { display: flex; align-items: center; gap: .6rem; color: #fff; font-weight: 800; font-size: 1.05rem; padding: .35rem .5rem 1.25rem; letter-spacing: -.01em; }
+    .shell-brand .logo { width: 30px; height: 30px; border-radius: 9px; background: var(--accent-mint); color: var(--navy-900); display: grid; place-items: center; font-size: .9rem; }
+    .nav-group { font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: #a3b1c8; margin: 1rem .6rem .4rem; }
+    .nav-item { display: flex; align-items: center; gap: .65rem; padding: .6rem .7rem; border-radius: 11px; font-size: .9rem; font-weight: 600; color: #cdd6e6; margin-bottom: .15rem; text-decoration: none; }
+    .nav-item .ic { width: 18px; height: 18px; border-radius: 6px; background: currentColor; opacity: .55; }
+    .nav-item .count { margin-left: auto; font-size: .7rem; font-weight: 700; background: rgba(255,255,255,.14); color: #fff; padding: .1rem .45rem; border-radius: 999px; }
+    .nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav-item[aria-current="page"] { background: rgba(255,255,255,.12); color: #fff; }
+    .nav-item[aria-current="page"] .ic { opacity: 1; background: var(--accent-mint); }
+    .shell-session { margin-top: auto; padding: 1rem .6rem 0; border-top: 1px solid rgba(255,255,255,.1); font-size: .8rem; color: #cdd6e6; }
+    .shell-session button { background: none; border: 0; color: #fff; font: inherit; font-weight: 700; padding: .3rem 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .shell-main { padding: 1.5rem 1.6rem; background: var(--surface-muted); min-width: 0; }
+    .shell-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.1rem; gap: 1rem; flex-wrap: wrap; }
+    .shell-top h3 { margin: 0; font-size: 1.35rem; color: var(--color-heading); font-weight: 800; letter-spacing: -.01em; }
+    .shell-top .who { font-size: .85rem; color: var(--color-text-muted); }
+    .mobile-bar { display: none; align-items: center; justify-content: space-between; background: var(--navy); color: #fff; padding: .7rem 1rem; }
+    .mobile-bar .shell-brand { padding: 0; }
+    .menu-btn { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 10px; height: 2.4rem; padding: 0 .9rem; font: inherit; font-weight: 700; cursor: pointer; }
+
+    /* KPIs */
+    .kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem; margin-bottom: 1rem; }
+    .kpi { background: var(--surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1rem 1.1rem; box-shadow: var(--shadow-xs); }
+    .kpi .lbl { font-size: .76rem; color: var(--color-text-muted); font-weight: 600; }
+    .kpi .val { font-size: 1.7rem; font-weight: 800; color: var(--color-heading); letter-spacing: -.02em; margin-top: .15rem; font-variant-numeric: tabular-nums; }
+    .kpi .val small { font-size: .9rem; font-weight: 700; color: var(--color-text-muted); margin-left: .2rem; }
+    .kpi .ctx { font-size: .74rem; font-weight: 600; color: var(--color-text-muted); }
+    .kpi.feature { background: var(--navy); border-color: var(--navy); }
+    .kpi.feature .lbl, .kpi.feature .val, .kpi.feature .ctx { color: #fff; }
+    .meter { height: 6px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; margin-top: .45rem; }
+    .meter > span { display: block; height: 100%; background: var(--navy); border-radius: 999px; }
+
+    /* Swatches */
+    .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .8rem; }
+    .swatch { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-xs); }
+    .swatch .chip { height: 66px; display: grid; place-items: center; font-weight: 800; font-size: .8rem; }
+    .swatch .meta { padding: .55rem .7rem; font-size: .75rem; }
+    .swatch .meta .name { font-weight: 700; color: var(--color-text); display: block; }
+    .swatch .meta .hex { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+
+    /* Type scale */
+    .type-row { display: flex; align-items: baseline; gap: 1rem; padding: .55rem 0; border-bottom: 1px dashed var(--color-border); flex-wrap: wrap; }
+    .type-row .tag { width: 150px; font-size: .75rem; color: var(--color-text-muted); flex: none; }
+    .d1 { font-size: 3.1rem;   font-weight: 800; color: var(--color-heading); letter-spacing: -.03em; }
+    .h1 { font-size: 1.6rem;   font-weight: 800; color: var(--color-heading); letter-spacing: -.02em; }
+    .h2 { font-size: 1.3rem;   font-weight: 700; color: var(--color-heading); letter-spacing: -.01em; }
+    .h3 { font-size: 1.125rem; font-weight: 700; color: var(--color-heading); }
+    .body { font-size: 1rem;    font-weight: 400; }
+    .small { font-size: .875rem; font-weight: 400; color: var(--color-text-muted); }
+    .label { font-size: .75rem;  font-weight: 700; color: var(--color-heading); letter-spacing: .02em; }
+    .metric { font-size: 1.7rem; font-weight: 800; color: var(--color-heading); font-variant-numeric: tabular-nums; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+      font-family: inherit; font-size: .95rem; font-weight: 700; line-height: 1; text-decoration: none;
+      height: 2.85rem; padding: 0 1.35rem; border-radius: 12px;
+      border: 1px solid transparent; cursor: pointer; transition: transform .12s, background .15s, border-color .15s, color .15s, box-shadow .15s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 .25rem var(--brand-primary-ring); }
+    .btn-primary { background: var(--brand-primary); color: #fff; box-shadow: 0 6px 16px rgba(30,58,95,.26); }
+    .btn-primary:hover { background: var(--brand-primary-hover); }
+    .btn-primary:active { background: var(--brand-primary-active); }
+    .btn-secondary { background: var(--brand-primary-soft); color: var(--brand-primary); }
+    .btn-secondary:hover { background: #dde6f0; }
+    .btn-outline { background: var(--surface); color: var(--color-heading); border-color: var(--color-border-strong); }
+    .btn-outline:hover { background: var(--surface-muted); border-color: var(--color-text-subtle); }
+    .btn-ghost { background: transparent; color: var(--brand-primary); }
+    .btn-ghost:hover { background: var(--brand-primary-soft); }
+    .btn-destructive { background: var(--destructive); color: #fff; }
+    .btn-destructive:hover { filter: brightness(.95); }
+    .btn[disabled], .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
+    .btn-sm { height: 2.3rem; font-size: .85rem; padding: 0 .95rem; border-radius: 10px; }
+    .btn-lg { height: 3.2rem; font-size: 1.05rem; padding: 0 1.6rem; border-radius: 14px; }
+    .spinner { width: 1rem; height: 1rem; border-radius: 50%; border: 2px solid rgba(255,255,255,.4); border-top-color: #fff; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .cluster { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
+
+    /* Fields */
+    .field { max-width: 360px; flex: 1 1 260px; }
+    .field label { display: block; font-size: .76rem; font-weight: 700; color: var(--color-heading); margin-bottom: .4rem; }
+    .field input, .field select, .search input {
+      width: 100%; height: 3.2rem; padding: 0 1rem; font-size: 1rem; font-family: inherit;
+      border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--surface); color: var(--color-text);
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .field input::placeholder, .search input::placeholder { color: var(--color-text-subtle); }
+    .field input:focus, .field select:focus, .search input:focus { outline: none; border-color: var(--brand-primary); box-shadow: 0 0 0 .25rem var(--brand-primary-ring); }
+    .field .hint { font-size: .8125rem; color: var(--color-text-muted); margin-top: .4rem; }
+    .field.error input { border-color: var(--destructive); }
+    .field.error input:focus { box-shadow: 0 0 0 .25rem rgba(220,38,38,.2); }
+    .field.error .hint { color: var(--destructive-text); font-weight: 600; }
+    .search { position: relative; flex: 1 1 240px; max-width: 320px; }
+    .search input { height: 2.6rem; border-radius: 999px; padding-left: 2.3rem; font-size: .9rem; }
+    .search::before { content: ""; position: absolute; left: .95rem; top: 50%; width: 12px; height: 12px; margin-top: -8px; border-radius: 50%; border: 2px solid var(--color-text-muted); }
+
+    /* Segmented filter */
+    .segmented { display: inline-flex; background: var(--surface-muted); border: 1px solid var(--color-border); border-radius: 12px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { border: 0; background: transparent; font: inherit; font-size: .8rem; font-weight: 700; color: var(--color-text-muted); padding: .4rem .75rem; border-radius: 9px; cursor: pointer; }
+    .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--color-heading); box-shadow: var(--shadow-xs); }
+
+    /* Cards / panels */
+    .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.1rem; }
+    .card { background: var(--surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); overflow: hidden; }
+    a.card { display: block; color: inherit; text-decoration: none; transition: transform .15s, box-shadow .15s; }
+    a.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+    .card .card-body { padding: 1.4rem; }
+    .card h4 { margin: 0 0 .25rem; font-size: 1.08rem; color: var(--color-heading); font-weight: 700; }
+    .card .muted { color: var(--color-text-muted); font-size: .875rem; margin: 0 0 1rem; }
+    .card .card-footer { padding: .9rem 1.4rem; border-top: 1px solid var(--color-border); background: var(--surface-muted); display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .8rem; color: var(--color-text-muted); }
+    .stat { font-size: 2.2rem; font-weight: 800; color: var(--color-heading); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .card-ico { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; margin-bottom: .85rem; font-weight: 800; }
+    .panel { background: var(--surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); overflow: hidden; min-width: 0; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.2rem; border-bottom: 1px solid var(--color-border); gap: .75rem; flex-wrap: wrap; }
+    .panel-head h4 { margin: 0; font-size: 1rem; color: var(--color-heading); font-weight: 700; }
+    .panel-head a { font-size: .8rem; color: var(--brand-primary); font-weight: 700; text-decoration: none; }
+    .panel-head a:hover { text-decoration: underline; }
+    .panel-body { padding: 1rem 1.2rem; }
+
+    /* Badges: color + texto + forma (el color nunca es el único portador) */
+    .badge { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 700; padding: .3rem .65rem; border-radius: 999px; white-space: nowrap; }
+    .badge::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; flex: none; }
+    .badge-normal        { color: var(--normal);        background: var(--normal-soft); }
+    .badge-informational { color: var(--informational); background: var(--informational-soft); }
+    .badge-warning       { color: var(--warning);       background: var(--warning-soft); }
+    .badge-warning::before { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); width: .6rem; }
+    .badge-critical      { color: var(--critical);      background: var(--critical-soft); }
+    .badge-critical::before { border-radius: 1px; transform: rotate(45deg); width: .45rem; height: .45rem; }
+    .badge-data-quality  { color: var(--data-quality);  background: var(--data-quality-soft); }
+    .badge-data-quality::before { background: transparent; border: 2px solid currentColor; }
+    .badge-neutral       { color: var(--neutral);       background: var(--neutral-soft); }
+    .badge-neutral::before { background: transparent; border: 2px dashed currentColor; }
+
+    /* Alerts — texto en el color de la alerta, con título */
+    .alert { display: flex; gap: .75rem; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; border-radius: var(--radius-md); padding: .95rem 1.1rem; font-size: .9rem; font-weight: 600; border: 1px solid; margin-bottom: .8rem; }
+    .alert strong { font-weight: 800; }
+    .alert a, .alert button.link { color: inherit; font-weight: 800; background: none; border: 0; font: inherit; font-weight: 800; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 0; }
+    .alert-normal        { color: var(--normal);        background: var(--normal-soft);        border-color: color-mix(in srgb, var(--normal) 28%, transparent); }
+    .alert-informational { color: var(--informational); background: var(--informational-soft); border-color: color-mix(in srgb, var(--informational) 28%, transparent); }
+    .alert-warning       { color: var(--warning);       background: var(--warning-soft);       border-color: color-mix(in srgb, var(--warning) 28%, transparent); }
+    .alert-critical      { color: var(--critical);      background: var(--critical-soft);      border-color: color-mix(in srgb, var(--critical) 28%, transparent); }
+    .alert-data-quality  { color: var(--data-quality);  background: var(--data-quality-soft);  border-color: color-mix(in srgb, var(--data-quality) 28%, transparent); }
+    .alert-error         { color: var(--destructive-text); background: var(--destructive-soft); border-color: color-mix(in srgb, var(--destructive) 28%, transparent); }
+
+    /* Table */
+    .tbl-wrap { border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow-x: auto; box-shadow: var(--shadow-sm); }
+    table.tbl { width: 100%; border-collapse: collapse; background: var(--surface); }
+    table.tbl caption { text-align: left; padding: .8rem 1.1rem 0; font-size: .8rem; color: var(--color-text-muted); }
+    table.tbl th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); background: var(--surface-muted); padding: .85rem 1.1rem; font-weight: 700; white-space: nowrap; }
+    table.tbl th.r, table.tbl td.r { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.tbl th button { all: unset; cursor: pointer; display: inline-flex; gap: .3rem; align-items: center; }
+    table.tbl th button:focus-visible { outline: 3px solid var(--brand-primary); outline-offset: 2px; border-radius: 4px; }
+    table.tbl th[aria-sort="descending"] button::after { content: "▼"; font-size: .6rem; }
+    table.tbl th[aria-sort="ascending"] button::after { content: "▲"; font-size: .6rem; }
+    table.tbl td { padding: .9rem 1.1rem; border-top: 1px solid var(--color-border); font-size: .9rem; }
+    table.tbl td a { color: var(--brand-primary); font-weight: 700; text-decoration: none; }
+    table.tbl td a:hover { text-decoration: underline; }
+    table.tbl tbody tr { transition: background .12s; }
+    table.tbl tbody tr:hover { background: var(--brand-primary-soft); }
+    .panel .tbl-wrap { border: none; border-radius: 0; box-shadow: none; }
+    .panel table.tbl th, .panel table.tbl td { padding-left: .8rem; padding-right: .8rem; }
+
+    /* Cola de investigación priorizada */
+    .queue { list-style: none; margin: 0; padding: .4rem .6rem; counter-reset: q; }
+    .queue li { display: grid; grid-template-columns: auto 1fr auto; gap: .75rem; align-items: center; padding: .75rem .6rem; border-radius: 12px; counter-increment: q; }
+    .queue li:hover { background: var(--surface-muted); }
+    .queue li::before { content: counter(q); width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: .8rem; background: var(--surface-muted); color: var(--color-heading); }
+    .queue .t { font-size: .9rem; color: var(--color-heading); font-weight: 700; }
+    .queue .s { font-size: .78rem; color: var(--color-text-muted); display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; margin-top: .2rem; }
+    .queue .act { font-size: .78rem; font-weight: 700; color: var(--brand-primary); white-space: nowrap; text-decoration: none; }
+    .queue .act:hover { text-decoration: underline; }
+
+    /* Progreso del análisis */
+    .prog { height: 8px; border-radius: 999px; background: var(--surface-muted); overflow: hidden; margin-top: .6rem; }
+    .prog > span { display: block; height: 100%; border-radius: 999px; background: var(--navy); }
+    .steps { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; margin: .9rem 0 0; }
+    .steps li { font-size: .76rem; font-weight: 700; padding: .35rem .65rem; border-radius: 999px; background: var(--surface-muted); color: var(--color-text-muted); }
+    .steps li.done { background: var(--normal-soft); color: var(--normal); }
+    .steps li.done::before { content: "✓ "; }
+    .steps li[aria-current="step"] { background: var(--brand-primary); color: #fff; }
+
+    /* Investigación */
+    .inv-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 1rem; }
+    .story { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; }
+    .story .blk { background: var(--surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: .9rem 1rem; }
+    .story .blk h5 { margin: 0 0 .3rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+    .story .blk p { margin: 0; font-size: .9rem; color: var(--color-heading); font-weight: 600; }
+    dl.evidence { display: grid; grid-template-columns: auto 1fr; gap: .45rem 1rem; margin: 0; font-size: .86rem; }
+    dl.evidence dt { color: var(--color-text-muted); font-weight: 600; }
+    dl.evidence dd { margin: 0; color: var(--color-heading); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .conf-row { display: grid; grid-template-columns: 9.5rem 1fr 2.6rem; gap: .6rem; align-items: center; font-size: .8rem; margin-bottom: .45rem; }
+    .conf-row .meter { margin: 0; }
+    .conf-row span:last-child { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* Gráfica */
+    .chart { position: relative; }
+    .chart svg { width: 100%; height: auto; display: block; }
+    .chart .grid line { stroke: var(--chart-grid); stroke-width: 1; }
+    .chart .axis text { fill: var(--chart-axis); font-size: 11px; font-family: var(--font-sans); }
+    .chart .lbl-dir { fill: var(--color-text-muted); font-size: 11px; font-weight: 700; font-family: var(--font-sans); }
+    .chart .lbl-strong { fill: var(--color-heading); font-size: 11px; font-weight: 800; font-family: var(--font-sans); }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 1rem; font-size: .78rem; color: var(--color-text-muted); margin: .2rem 0 .5rem; }
+    .chart-legend span { display: inline-flex; align-items: center; gap: .4rem; }
+    .chart-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+    .tooltip { position: absolute; pointer-events: none; background: var(--color-heading); color: #fff; font-size: .78rem; font-weight: 600; padding: .45rem .6rem; border-radius: 8px; box-shadow: var(--shadow-md); white-space: nowrap; transform: translate(-50%, -115%); opacity: 0; transition: opacity .1s; }
+    details.table-view { margin-top: .6rem; font-size: .82rem; }
+    details.table-view summary { cursor: pointer; font-weight: 700; color: var(--brand-primary); }
+
+    /* Estados */
+    .states { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .state { background: var(--surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 1.3rem; text-align: center; box-shadow: var(--shadow-xs); }
+    .state h5 { margin: .6rem 0 .3rem; font-size: 1rem; color: var(--color-heading); }
+    .state p { margin: 0 0 1rem; font-size: .86rem; color: var(--color-text-muted); }
+    .state .glyph { width: 44px; height: 44px; border-radius: 13px; margin: 0 auto; display: grid; place-items: center; font-weight: 800; }
+    .skel { background: linear-gradient(90deg, var(--surface-muted) 0%, #e9ecf4 50%, var(--surface-muted) 100%); background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite; border-radius: 8px; height: .8rem; margin: .5rem 0; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    .note { font-size: .82rem; color: var(--color-text-muted); margin-top: .6rem; }
+    .changes { font-size: .88rem; padding-left: 1.2rem; }
+    .changes li { margin-bottom: .35rem; }
+
+    .sim-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; margin-top: 1rem; }
+    .sim-actions { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+
+    @media (max-width: 980px) { .inv-grid { grid-template-columns: minmax(0, 1fr); } }
+    /* Tablet y móvil: la barra lateral se vuelve barra superior con menú */
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .mobile-bar { display: flex; }
+      .shell-aside { display: none; }
+      .shell.nav-open .shell-aside { display: flex; }
+    }
+    @media (max-width: 720px) {
+      .wrap { padding: 1.5rem 1rem 4rem; }
+      .shell-main { padding: 1.1rem 1rem; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .kpi .val { font-size: 1.45rem; }
+    }
+    /* Tabla apilada en móvil: cada fila se vuelve una tarjeta etiquetada */
+    @media (max-width: 640px) {
+      table.stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      table.stack tr { display: block; border-top: 1px solid var(--color-border); padding: .5rem 0; }
+      table.stack td { display: flex; justify-content: space-between; gap: 1rem; border: 0; padding: .35rem 1.1rem; text-align: right; }
+      table.stack td::before { content: attr(data-label); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); font-weight: 700; text-align: left; }
+      .conf-row { grid-template-columns: 7.5rem 1fr 2.4rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; animation: none !important; }
+      a.card:hover, .btn:active { transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+  <div class="wrap" id="contenido">
+    <header class="hero">
+      <div>
+        <h1>Bia Energy — Design System</h1>
+        <p>Referencia visual canónica de la plataforma de gestión energética. El navy <strong>#1E3A5F</strong> es el único color de acción primaria; menta, cielo, violeta y ámbar son acentos de apoyo. Los estados de negocio usan una semántica propia: <strong>normal, informativo, advertencia, crítico y calidad de datos</strong>. Contrato de implementación: <code>docs/design/design-system.md</code>.</p>
+      </div>
+      <span class="pill-tag">Referencia visual · v3 Energy</span>
+    </header>
+
+    <!-- ===================== SIMULACIÓN: DASHBOARD ===================== -->
+    <section class="sim" aria-labelledby="sim-title" style="margin-top:1.5rem;">
+      <h2 class="section-title" id="sim-title">Simulación — Dashboard de operación</h2>
+      <p class="lead">Responde en segundos: ¿qué está pasando con los medidores, qué requiere atención primero y por qué?</p>
+      <div class="shell" id="shell">
+        <div class="mobile-bar">
+          <div class="shell-brand"><span class="logo" aria-hidden="true">B</span> Bia Energy</div>
+          <button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav-principal" id="menu-btn">Menú</button>
+        </div>
+        <aside class="shell-aside" id="nav-principal">
+          <div class="shell-brand"><span class="logo" aria-hidden="true">B</span> Bia Energy</div>
+          <nav aria-label="Navegación principal">
+            <div class="nav-group">Operación</div>
+            <a class="nav-item" href="#" aria-current="page"><span class="ic" aria-hidden="true"></span> Dashboard</a>
+            <a class="nav-item" href="#"><span class="ic" aria-hidden="true"></span> Medidores <span class="count">12</span></a>
+            <a class="nav-item" href="#"><span class="ic" aria-hidden="true"></span> Anomalías IA <span class="count">4</span></a>
+          </nav>
+          <div class="shell-session">Sesión: operador demo<br /><button type="button">Cerrar sesión</button></div>
+        </aside>
+
+        <main class="shell-main">
+          <div class="shell-top">
+            <div>
+              <h3>Dashboard</h3>
+              <span class="who">Periodo 1–14 sep 2026 · 12 medidores · lecturas horarias</span>
+            </div>
+            <div class="sim-actions">
+              <div class="search">
+                <label for="buscar" class="sr-only">Buscar medidor por meter_id</label>
+                <input id="buscar" type="search" placeholder="Buscar medidor (p. ej. M-109)" />
+              </div>
+              <button class="btn btn-primary" type="button">Ejecutar análisis IA</button>
+            </div>
+          </div>
+
+          <div class="alert alert-informational" role="status">
+            <span><strong>Análisis completado a las 09:42.</strong> 4 anomalías detectadas · 2 requieren atención prioritaria.</span>
+            <a href="#investigacion">Ver la más prioritaria</a>
+          </div>
+
+          <!-- KPIs del reto -->
+          <div class="kpis">
+            <div class="kpi"><div class="lbl">Medidores</div><div class="val">12</div><div class="ctx">14 días · 4.032 lecturas</div></div>
+            <div class="kpi"><div class="lbl">Consumo del periodo</div><div class="val">≈156<small>MWh</small></div><div class="ctx">Suma de lecturas horarias</div></div>
+            <div class="kpi"><div class="lbl">Anomalías IA</div><div class="val">4</div><div class="ctx">1 real · 1 datos · 1 explicable · 1 falso positivo</div></div>
+            <div class="kpi feature"><div class="lbl">Alta prioridad</div><div class="val">2</div><div class="ctx">M-109 · M-112</div></div>
+            <div class="kpi"><div class="lbl">Confianza IA</div><div class="val">0,91</div><div class="ctx">Alta · promedio de las 4 anomalías</div><div class="meter" role="img" aria-label="Confianza 91%"><span style="width:91%"></span></div></div>
+            <div class="kpi"><div class="lbl">Último análisis</div><div class="val">09:42</div><div class="ctx"><span class="badge badge-normal">Completado</span></div></div>
+          </div>
+
+          <div class="sim-grid">
+            <div class="panel">
+              <div class="panel-head"><h4>Cola de investigación</h4><a href="#">Todas las anomalías →</a></div>
+              <ol class="queue" aria-label="Anomalías en orden de prioridad">
+                <li><div><div class="t">M-109 · Anomalía real</div><div class="s"><span class="badge badge-critical">Alta</span> Confianza 0,96</div></div><a class="act" href="#investigacion">Investigar</a></li>
+                <li><div><div class="t">M-112 · Calidad de datos</div><div class="s"><span class="badge badge-critical">Alta</span> Confianza 0,93</div></div><a class="act" href="#">Validar lecturas</a></li>
+                <li><div><div class="t">M-104 · Anomalía explicable</div><div class="s"><span class="badge badge-warning">Media</span> Confianza 0,90</div></div><a class="act" href="#">Validar operación</a></li>
+                <li><div><div class="t">M-106 · Falso positivo</div><div class="s"><span class="badge badge-neutral">Baja</span> Confianza 0,84</div></div><a class="act" href="#">No escalar</a></li>
+              </ol>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <h4>Medidores</h4>
+                <div class="segmented" role="group" aria-label="Filtrar por estado">
+                  <button type="button" aria-pressed="true" data-filter="all">Todos</button>
+                  <button type="button" aria-pressed="false" data-filter="normal">Normales</button>
+                  <button type="button" aria-pressed="false" data-filter="alert">Alertas</button>
+                  <button type="button" aria-pressed="false" data-filter="critical">Críticos</button>
+                </div>
+              </div>
+              <div class="tbl-wrap">
+                <table class="tbl stack" id="tabla-medidores">
+                  <caption>Ordenado por severidad · consumo del último día frente a su baseline</caption>
+                  <thead><tr>
+                    <th scope="col">Medidor</th>
+                    <th scope="col" class="r"><button type="button">Consumo</button></th>
+                    <th scope="col" class="r"><button type="button">Variación</button></th>
+                    <th scope="col">Estado</th>
+                    <th scope="col">Tipo</th>
+                    <th scope="col" aria-sort="descending"><button type="button">Severidad</button></th>
+                  </tr></thead>
+                  <tbody>
+                    <tr data-status="critical"><td data-label="Medidor"><a href="#investigacion">M-109</a></td><td data-label="Consumo" class="r">2.180 kWh</td><td data-label="Variación" class="r">+103,7 %</td><td data-label="Estado"><span class="badge badge-critical">Crítico</span></td><td data-label="Tipo"><span class="badge badge-critical">Real</span></td><td data-label="Severidad"><span class="badge badge-critical">Alta</span></td></tr>
+                    <tr data-status="alert"><td data-label="Medidor"><a href="#">M-112</a></td><td data-label="Consumo" class="r">690 kWh</td><td data-label="Variación" class="r">−1,4 %</td><td data-label="Estado"><span class="badge badge-warning">Alerta</span></td><td data-label="Tipo"><span class="badge badge-data-quality">Calidad de datos</span></td><td data-label="Severidad"><span class="badge badge-critical">Alta</span></td></tr>
+                    <tr data-status="alert"><td data-label="Medidor"><a href="#">M-104</a></td><td data-label="Consumo" class="r">1.860 kWh</td><td data-label="Variación" class="r">+47,6 %</td><td data-label="Estado"><span class="badge badge-warning">Alerta</span></td><td data-label="Tipo"><span class="badge badge-informational">Explicable</span></td><td data-label="Severidad"><span class="badge badge-warning">Media</span></td></tr>
+                    <tr data-status="normal"><td data-label="Medidor"><a href="#">M-101</a></td><td data-label="Consumo" class="r">820 kWh</td><td data-label="Variación" class="r">+2,5 %</td><td data-label="Estado"><span class="badge badge-normal">Normal</span></td><td data-label="Tipo">—</td><td data-label="Severidad">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+      <p class="note">Simulación no funcional. Todos los valores son ilustrativos (tomados de los ejemplos del enunciado o aproximados a mano); no son salidas del motor de análisis.</p>
+    </section>
+
+    <!-- ===================== SIMULACIÓN: INVESTIGACIÓN ===================== -->
+    <section id="investigacion" aria-labelledby="inv-title">
+      <h2 class="section-title" id="inv-title">Simulación — Investigación de anomalía</h2>
+      <p class="lead">Patrón de explicabilidad: <strong>qué pasó → por qué importa → evidencia → qué hacer</strong>. La explicación siempre se apoya en evidencia estructurada.</p>
+
+      <div class="panel" style="margin-bottom:1rem;">
+        <div class="panel-head">
+          <div>
+            <h4>M-109 · Aumento sostenido del consumo sin evento conocido</h4>
+            <div class="cluster" style="gap:.4rem; margin-top:.4rem;">
+              <span class="badge badge-critical">Anomalía real</span>
+              <span class="badge badge-critical">Severidad alta</span>
+              <span class="badge badge-informational">Confianza 0,96 · Alta</span>
+              <span class="badge badge-neutral">Prioridad 1 de 4</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button">Investigar medidor e instalación</button>
+        </div>
+        <div class="panel-body">
+          <div class="story">
+            <div class="blk"><h5>Qué pasó</h5><p>Desde el 12 sep 14:00 el consumo se duplicó y se mantiene.</p></div>
+            <div class="blk"><h5>Por qué importa</h5><p>+103,7 % sobre su baseline con cambios eléctricos y sin evento que lo explique.</p></div>
+            <div class="blk"><h5>Qué hacer</h5><p>Inspeccionar el medidor y la instalación; confirmar cargas nuevas o fallas.</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-grid">
+        <div class="panel">
+          <div class="panel-head"><h4>Consumo diario frente a baseline</h4></div>
+          <div class="panel-body">
+            <div class="chart-legend" aria-hidden="true">
+              <span><i style="background:var(--chart-series); height:3px;"></i>Consumo observado</span>
+              <span><i style="background:var(--chart-baseline-band);"></i>Baseline esperado</span>
+              <span><i style="background:var(--chart-anomaly); border:1px solid var(--critical);"></i>Periodo anómalo</span>
+            </div>
+            <div class="chart" id="chart">
+              <svg viewBox="0 0 640 236" role="img" aria-labelledby="chart-t chart-d">
+                <title id="chart-t">Consumo diario de M-109, 1 al 14 de septiembre</title>
+                <desc id="chart-d">Estable cerca de 1.050 kWh por día hasta el 11 de septiembre; sube a 1.562 kWh el 12 y a unos 2.200 kWh el 13 y 14, fuera de la banda de baseline.</desc>
+                <g class="grid">
+                  <line x1="60" x2="620" y1="208" y2="208"/><line x1="60" x2="620" y1="133" y2="133"/><line x1="60" x2="620" y1="58" y2="58"/>
+                </g>
+                <g class="axis">
+                  <text x="52" y="212" text-anchor="end">0</text><text x="52" y="137" text-anchor="end">1.000</text><text x="52" y="62" text-anchor="end">2.000</text>
+                  <text x="60" y="228" text-anchor="middle">1 sep</text><text x="189.2" y="228" text-anchor="middle">4 sep</text><text x="318.5" y="228" text-anchor="middle">7 sep</text><text x="447.7" y="228" text-anchor="middle">10 sep</text><text x="576.9" y="228" text-anchor="middle">13 sep</text>
+                </g>
+                <rect x="522" y="20" width="102" height="188" fill="var(--chart-anomaly)"/>
+                <rect x="60" y="124.8" width="560" height="9" fill="var(--chart-baseline-band)"/>
+                <text class="lbl-dir" x="66" y="118">Baseline ≈ 1.050 kWh/día</text>
+                <line x1="533.8" x2="533.8" y1="20" y2="208" stroke="var(--critical)" stroke-width="1.5" stroke-dasharray="4 4"/>
+                <text class="lbl-strong" x="526" y="34" text-anchor="end">12 sep 14:00 · sin evento operativo</text>
+                <path d="M60 129.6 L103.1 129.1 L146.2 128.4 L189.2 129.3 L232.3 128.6 L275.4 129.8 L318.5 129.3 L361.5 129.5 L404.6 128.9 L447.7 129.2 L490.8 129.3 L533.8 90.8 L576.9 43.3 L620 42.9" fill="none" stroke="var(--chart-series)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+                <circle cx="620" cy="42.9" r="4.5" fill="var(--chart-series)" stroke="#fff" stroke-width="2"/>
+                <text class="lbl-dir" x="526" y="50" text-anchor="end">≈ 2.200 kWh/día · consumo ×2</text>
+                <g id="hover" opacity="0"><line id="hover-line" y1="20" y2="208" stroke="var(--chart-axis)" stroke-width="1"/><circle id="hover-dot" r="5" fill="var(--chart-series)" stroke="#fff" stroke-width="2"/></g>
+                <rect id="hit" x="40" y="20" width="600" height="190" fill="transparent"/>
+              </svg>
+              <div class="tooltip" id="tooltip" role="presentation"></div>
+            </div>
+            <details class="table-view">
+              <summary>Ver datos como tabla</summary>
+              <table class="tbl" style="margin-top:.5rem;">
+                <thead><tr><th scope="col">Día</th><th scope="col" class="r">Consumo (kWh)</th></tr></thead>
+                <tbody id="chart-table"></tbody>
+              </table>
+            </details>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h4>Evidencia</h4></div>
+          <div class="panel-body">
+            <dl class="evidence">
+              <dt>Baseline diario</dt><dd>≈ 1.070 kWh</dd>
+              <dt>Observado</dt><dd>2.180 kWh</dd>
+              <dt>Desviación</dt><dd>+103,7 %</dd>
+              <dt>Persistencia</dt><dd>desde 12 sep 14:00</dd>
+              <dt>Corriente</dt><dd>≈ ×2</dd>
+              <dt>Factor de potencia</dt><dd>0,94 → 0,74</dd>
+              <dt>Voltaje</dt><dd>≈ −4 V</dd>
+              <dt>Eventos</dt><dd>Ninguno que lo explique</dd>
+            </dl>
+            <h3 class="sub">Composición de la confianza</h3>
+            <div class="conf-row"><span>Fuerza de detección</span><div class="meter"><span style="width:98%"></span></div><span>0,98</span></div>
+            <div class="conf-row"><span>Persistencia</span><div class="meter"><span style="width:95%"></span></div><span>0,95</span></div>
+            <div class="conf-row"><span>Confirmación multivariable</span><div class="meter"><span style="width:94%"></span></div><span>0,94</span></div>
+            <div class="conf-row"><span>Ausencia de explicación</span><div class="meter"><span style="width:96%"></span></div><span>0,96</span></div>
+            <div class="conf-row"><span>Fiabilidad de datos</span><div class="meter"><span style="width:97%"></span></div><span>0,97</span></div>
+            <p class="note">Explicación generada por: proveedor determinista.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== COLORES ===================== -->
+    <section aria-labelledby="col-title">
+      <h2 class="section-title" id="col-title">Colores</h2>
+
+      <h3 class="sub">Marca · navy como primary</h3>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--brand-primary)"></div><div class="meta"><span class="name">primary (navy)</span><span class="hex">#1E3A5F</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--brand-primary-hover)"></div><div class="meta"><span class="name">primary-hover</span><span class="hex">#16314F</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--brand-primary-active)"></div><div class="meta"><span class="name">primary-active</span><span class="hex">#0F2238</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--brand-primary-soft)"></div><div class="meta"><span class="name">primary-soft</span><span class="hex">#EAEFF5</span></div></div>
+      </div>
+
+      <h3 class="sub">Acentos de apoyo (jerarquía y gráficas)</h3>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--accent-mint)"></div><div class="meta"><span class="name">mint</span><span class="hex">#10B981</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-sky)"></div><div class="meta"><span class="name">sky</span><span class="hex">#0EA5E9</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-violet)"></div><div class="meta"><span class="name">violet</span><span class="hex">#6366F1</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--accent-amber)"></div><div class="meta"><span class="name">amber</span><span class="hex">#F59E0B</span></div></div>
+      </div>
+
+      <h3 class="sub">Neutrales</h3>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--color-heading)"></div><div class="meta"><span class="name">heading</span><span class="hex">#11203A</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--color-text)"></div><div class="meta"><span class="name">text</span><span class="hex">#28324A</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--color-text-muted)"></div><div class="meta"><span class="name">text-muted</span><span class="hex">#5D6880</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--color-border-strong)"></div><div class="meta"><span class="name">border-strong</span><span class="hex">#D4D9E6</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--surface-muted)"></div><div class="meta"><span class="name">surface-muted</span><span class="hex">#F3F5FA</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--page-bg)"></div><div class="meta"><span class="name">page-bg</span><span class="hex">#F5F6FB</span></div></div>
+      </div>
+
+      <h3 class="sub">Semántica Energy Management (texto sobre fondo suave ≥ 4.5:1)</h3>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--normal-soft); color:var(--normal)">4.82:1</div><div class="meta"><span class="name">normal</span><span class="hex">#0F766E / #E3F4F1</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--informational-soft); color:var(--informational)">9.95:1</div><div class="meta"><span class="name">informativo</span><span class="hex">#1E3A5F / #EAEFF5</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--warning-soft); color:var(--warning)">4.98:1</div><div class="meta"><span class="name">advertencia</span><span class="hex">#8A6100 / #FCF2DD</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--critical-soft); color:var(--critical)">7.03:1</div><div class="meta"><span class="name">crítico</span><span class="hex">#9F1239 / #FDECEF</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--data-quality-soft); color:var(--data-quality)">5.55:1</div><div class="meta"><span class="name">calidad de datos</span><span class="hex">#4F46E5 / #EEF0FE</span></div></div>
+      </div>
+
+      <h3 class="sub">Destructivo (solo acciones destructivas y errores del sistema)</h3>
+      <div class="swatches">
+        <div class="swatch"><div class="chip" style="background:var(--destructive); color:#fff">4.83:1</div><div class="meta"><span class="name">destructive</span><span class="hex">#DC2626</span></div></div>
+        <div class="swatch"><div class="chip" style="background:var(--destructive-soft); color:var(--destructive-text)">5.66:1</div><div class="meta"><span class="name">destructive-text / soft</span><span class="hex">#B91C1C / #FDECEC</span></div></div>
+      </div>
+    </section>
+
+    <!-- ===================== SEMÁNTICA ===================== -->
+    <section aria-labelledby="sem-title">
+      <h2 class="section-title" id="sem-title">Semántica de negocio</h2>
+      <p class="lead">Tipo de anomalía, severidad y estado del medidor son conceptos distintos. Cada badge combina color, texto y forma (círculo, triángulo, rombo, anillo, línea discontinua), así el color nunca es el único portador de significado.</p>
+      <h3 class="sub">Estado calculado del medidor</h3>
+      <div class="cluster">
+        <span class="badge badge-normal">Normal</span>
+        <span class="badge badge-warning">Alerta</span>
+        <span class="badge badge-critical">Crítico</span>
+        <span class="badge badge-neutral">Sin analizar</span>
+      </div>
+      <h3 class="sub">Tipo de anomalía</h3>
+      <div class="cluster">
+        <span class="badge badge-critical">Anomalía real</span>
+        <span class="badge badge-informational">Anomalía explicable</span>
+        <span class="badge badge-informational">Falso positivo</span>
+        <span class="badge badge-data-quality">Calidad de datos</span>
+      </div>
+      <h3 class="sub">Severidad</h3>
+      <div class="cluster">
+        <span class="badge badge-critical">Alta</span>
+        <span class="badge badge-warning">Media</span>
+        <span class="badge badge-neutral">Baja</span>
+      </div>
+      <p class="note">El estado de origen del CSV (<code>source_status</code>) nunca se muestra como salud del medidor; la salud es siempre el estado calculado.</p>
+    </section>
+
+    <!-- ===================== TIPOGRAFÍA ===================== -->
+    <section aria-labelledby="typo-title">
+      <h2 class="section-title" id="typo-title">Tipografía — Plus Jakarta Sans</h2>
+      <div class="type-row"><span class="tag">Display / 50·800</span><span class="d1">Bia Energy</span></div>
+      <div class="type-row"><span class="tag">H1 / 26·800</span><span class="h1">Anomalías IA</span></div>
+      <div class="type-row"><span class="tag">H2 / 21·700</span><span class="h2">Evidencia del análisis</span></div>
+      <div class="type-row"><span class="tag">H3 / 18·700</span><span class="h3">Consumo frente a baseline</span></div>
+      <div class="type-row"><span class="tag">Body / 16·400</span><span class="body">El consumo supera su baseline de forma sostenida y sin evento operativo que lo explique.</span></div>
+      <div class="type-row"><span class="tag">Small / 14·400</span><span class="small">Texto secundario, contexto y ayudas.</span></div>
+      <div class="type-row"><span class="tag">Label / 12·700</span><span class="label">METER_ID</span></div>
+      <div class="type-row"><span class="tag">Métrica / tabular</span><span class="metric">2.180 kWh · 0,96</span></div>
+    </section>
+
+    <!-- ===================== BOTONES ===================== -->
+    <section aria-labelledby="btn-title">
+      <h2 class="section-title" id="btn-title">Botones</h2>
+      <h3 class="sub">Variantes</h3>
+      <div class="cluster">
+        <button class="btn btn-primary" type="button">Ejecutar análisis IA</button>
+        <button class="btn btn-secondary" type="button">Ver medidor</button>
+        <button class="btn btn-outline" type="button">Limpiar filtros</button>
+        <button class="btn btn-ghost" type="button">Ver evidencia</button>
+        <button class="btn btn-destructive" type="button">Restablecer datos demo</button>
+        <button class="btn btn-primary" type="button" disabled>Deshabilitado</button>
+      </div>
+      <h3 class="sub">Estado en curso</h3>
+      <div class="cluster">
+        <button class="btn btn-primary" type="button" aria-disabled="true" aria-busy="true"><span class="spinner" aria-hidden="true"></span> Analizando…</button>
+      </div>
+      <h3 class="sub">Tamaños</h3>
+      <div class="cluster">
+        <button class="btn btn-primary btn-sm" type="button">Small</button>
+        <button class="btn btn-primary" type="button">Medium</button>
+        <button class="btn btn-primary btn-lg" type="button">Large</button>
+      </div>
+      <p class="note">Una sola acción primaria por pantalla. El estilo destructivo se reserva para acciones que borran o restablecen datos, nunca para llamar la atención.</p>
+    </section>
+
+    <!-- ===================== CAMPOS ===================== -->
+    <section aria-labelledby="form-title">
+      <h2 class="section-title" id="form-title">Campos</h2>
+      <div class="cluster" style="align-items:flex-start; gap:2rem;">
+        <div class="field">
+          <label for="correo">Correo</label>
+          <input id="correo" type="email" placeholder="operador@empresa.com" autocomplete="username" aria-describedby="correo-hint" />
+          <div class="hint" id="correo-hint">Usa el correo de acceso a la plataforma.</div>
+        </div>
+        <div class="field error">
+          <label for="clave">Contraseña</label>
+          <input id="clave" type="password" value="123" autocomplete="current-password" aria-invalid="true" aria-describedby="clave-err" />
+          <div class="hint" id="clave-err">Correo o contraseña incorrectos.</div>
+        </div>
+        <div class="field">
+          <label for="severidad">Severidad</label>
+          <select id="severidad"><option>Todas</option><option>Alta</option><option>Media</option><option>Baja</option></select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CARDS ===================== -->
+    <section aria-labelledby="card-title">
+      <h2 class="section-title" id="card-title">Cards</h2>
+      <div class="grid-cards">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-ico" style="background:var(--brand-primary-soft); color:var(--brand-primary);" aria-hidden="true">kWh</div>
+            <h4>Consumo del periodo</h4>
+            <p class="muted">12 medidores · 14 días</p>
+            <div class="stat">≈156 MWh</div>
+          </div>
+        </div>
+        <a class="card" href="#">
+          <div class="card-body">
+            <div class="card-ico" style="background:var(--normal-soft); color:var(--normal);" aria-hidden="true">M</div>
+            <h4>M-101</h4>
+            <p class="muted">820 kWh · +2,5 % vs baseline</p>
+            <span class="badge badge-normal">Normal</span>
+          </div>
+          <div class="card-footer"><span>Sin anomalías</span><span>Ver detalle →</span></div>
+        </a>
+        <a class="card" href="#investigacion">
+          <div class="card-body">
+            <div class="card-ico" style="background:var(--critical-soft); color:var(--critical);" aria-hidden="true">M</div>
+            <h4>M-109</h4>
+            <p class="muted">2.180 kWh · +103,7 % vs baseline</p>
+            <span class="badge badge-critical">Crítico</span>
+          </div>
+          <div class="card-footer"><span>Anomalía real · Alta</span><span>Investigar →</span></div>
+        </a>
+      </div>
+      <p class="note">La elevación al pasar el cursor solo se usa en cards navegables.</p>
+    </section>
+
+    <!-- ===================== ALERTAS ===================== -->
+    <section aria-labelledby="alert-title">
+      <h2 class="section-title" id="alert-title">Alertas</h2>
+      <div class="alert alert-normal" role="status"><span><strong>Datos importados.</strong> 4.032 lecturas de 12 medidores.</span></div>
+      <div class="alert alert-informational" role="status"><span><strong>Evento operativo correlacionado.</strong> M-104: nueva línea productiva desde el 11 sep.</span></div>
+      <div class="alert alert-warning"><span><strong>Revisión sugerida.</strong> El baseline de M-104 debería validarse tras el cambio operativo.</span></div>
+      <div class="alert alert-critical"><span><strong>Anomalía prioritaria.</strong> M-109 supera su baseline en +103,7 % sin explicación.</span><a href="#investigacion">Investigar</a></div>
+      <div class="alert alert-data-quality"><span><strong>Lecturas inconsistentes.</strong> M-112 reporta saltos de voltaje y factor de potencia con consumo estable.</span></div>
+      <div class="alert alert-error" role="alert"><span><strong>No se pudo ejecutar el análisis.</strong> El servicio no respondió.</span><button class="link" type="button">Reintentar</button></div>
+    </section>
+
+    <!-- ===================== PROGRESO ===================== -->
+    <section aria-labelledby="prog-title">
+      <h2 class="section-title" id="prog-title">Progreso del análisis IA</h2>
+      <div class="panel">
+        <div class="panel-body" role="status" aria-live="polite">
+          <div style="display:flex; justify-content:space-between; gap:1rem; font-size:.88rem; font-weight:700; color:var(--color-heading);"><span>Correlacionando eventos…</span><span class="num">Etapa 4 de 7</span></div>
+          <div class="prog" role="progressbar" aria-label="Progreso del análisis" aria-valuemin="0" aria-valuemax="7" aria-valuenow="4"><span style="width:57%"></span></div>
+          <ol class="steps">
+            <li class="done">Lecturas</li><li class="done">Baseline</li><li class="done">Detección</li>
+            <li aria-current="step">Correlación</li><li>Eventos</li><li>Explicación</li><li>Recomendación</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== ESTADOS ===================== -->
+    <section aria-labelledby="states-title">
+      <h2 class="section-title" id="states-title">Estados de vista</h2>
+      <div class="states">
+        <div class="state" aria-busy="true">
+          <span class="sr-only">Cargando medidores…</span>
+          <div class="skel" style="width:60%; margin:0 auto .8rem;"></div>
+          <div class="skel"></div><div class="skel" style="width:85%"></div><div class="skel" style="width:70%"></div>
+          <p style="margin-top:.8rem;">Cargando</p>
+        </div>
+        <div class="state">
+          <div class="glyph" style="background:var(--brand-primary-soft); color:var(--brand-primary);" aria-hidden="true">IA</div>
+          <h5>Aún no hay análisis</h5>
+          <p>Ejecuta el análisis IA para detectar y priorizar anomalías.</p>
+          <button class="btn btn-primary btn-sm" type="button">Ejecutar análisis IA</button>
+        </div>
+        <div class="state">
+          <div class="glyph" style="background:var(--surface-muted); color:var(--color-text-muted);" aria-hidden="true">∅</div>
+          <h5>Sin resultados</h5>
+          <p>Ningún medidor coincide con «M-2» y el filtro «Críticos».</p>
+          <button class="btn btn-outline btn-sm" type="button">Limpiar filtros</button>
+        </div>
+        <div class="state" role="alert">
+          <div class="glyph" style="background:var(--destructive-soft); color:var(--destructive-text);" aria-hidden="true">!</div>
+          <h5>No se pudieron cargar los medidores</h5>
+          <p>Revisa la conexión e inténtalo de nuevo.</p>
+          <button class="btn btn-secondary btn-sm" type="button">Reintentar</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    // Menú móvil
+    (function () {
+      var btn = document.getElementById('menu-btn'), shell = document.getElementById('shell');
+      btn.addEventListener('click', function () {
+        var open = shell.classList.toggle('nav-open');
+        btn.setAttribute('aria-expanded', String(open));
+      });
+    })();
+
+    // Filtro segmentado de la tabla de medidores
+    (function () {
+      var buttons = document.querySelectorAll('.segmented button');
+      var rows = document.querySelectorAll('#tabla-medidores tbody tr');
+      buttons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          buttons.forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+          var f = b.dataset.filter;
+          rows.forEach(function (r) { r.hidden = !(f === 'all' || r.dataset.status === f); });
+        });
+      });
+    })();
+
+    // Gráfica: tooltip con línea guía y vista de tabla (datos ilustrativos)
+    (function () {
+      var v = [1046,1052,1061,1049,1058,1043,1050,1047,1055,1051,1049,1562,2196,2201];
+      var X = function (i) { return 60 + i * 560 / 13; }, Y = function (val) { return 208 - val / 2400 * 180; };
+      var fmt = function (n) { return n.toLocaleString('es-CO'); };
+      var tbody = document.getElementById('chart-table');
+      v.forEach(function (val, i) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + (i + 1) + ' sep</td><td class="r">' + fmt(val) + '</td>';
+        tbody.appendChild(tr);
+      });
+      var svg = document.querySelector('#chart svg'), hit = document.getElementById('hit');
+      var hover = document.getElementById('hover'), line = document.getElementById('hover-line'), dot = document.getElementById('hover-dot');
+      var tip = document.getElementById('tooltip'), box = document.getElementById('chart');
+      hit.addEventListener('pointermove', function (e) {
+        var pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+        var p = pt.matrixTransform(svg.getScreenCTM().inverse());
+        var i = Math.max(0, Math.min(13, Math.round((p.x - 60) / (560 / 13))));
+        var x = X(i), y = Y(v[i]);
+        line.setAttribute('x1', x); line.setAttribute('x2', x);
+        dot.setAttribute('cx', x); dot.setAttribute('cy', y); hover.setAttribute('opacity', 1);
+        var scale = box.clientWidth / 640;
+        var left = x * scale, edge = box.clientWidth;
+        tip.style.left = left + 'px'; tip.style.top = (y * scale) + 'px'; tip.style.opacity = 1;
+        tip.style.transform = left > edge - 110 ? 'translate(-100%, -115%)' : left < 110 ? 'translate(0, -115%)' : 'translate(-50%, -115%)';
+        tip.textContent = (i + 1) + ' sep · ' + fmt(v[i]) + ' kWh · baseline ≈ 1.050';
+      });
+      hit.addEventListener('pointerleave', function () { hover.setAttribute('opacity', 0); tip.style.opacity = 0; });
+    })();
+  </script>
+</body>
+</html>

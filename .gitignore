@@ -1,0 +1,64 @@
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# Environment and secrets (commit only *.example templates)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Go
+/src/backend/bin/
+*.exe
+*.test
+*.out
+coverage.html
+tmp/
+
+# Build output and logs
+dist/
+build/
+*.log
+
+# Local databases, volumes, and model caches
+.data/
+pgdata/
+*.dump
+.ollama/
+
+# Per-user agent/tool state.
+# Shared agent governance (AGENTS.md, CLAUDE.md, .github/copilot-instructions.md, .agents/) IS tracked.
+.claude/settings.local.json
+.claude/cache/
+.codex/
+.copilot/
+.gemini/
+
+# Evaluator-only file: must never be committed to this repository
+expected_results.csv
