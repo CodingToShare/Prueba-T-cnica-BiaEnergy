@@ -2,7 +2,7 @@
 
 An MVP for electrical meter management that turns energy data into operational decisions: it detects anomalies, explains them with evidence, prioritizes what to investigate first, and recommends an action.
 
-> **Current status:** Phase 00 (repository and engineering governance foundation) is complete. **The application is not implemented yet.** No commands in this repository run a product today.
+> **Current status:** Phase 01 is complete. The Go runtime, the PostgreSQL schema and the verified, idempotent import of the challenge dataset work, together with health and readiness endpoints. **Analytics, the product API and the frontend are not implemented yet** (Phases 02–05).
 
 ## Challenge Summary
 
@@ -64,12 +64,13 @@ Detection, classification (`REAL_ANOMALY`, `EXPLAINABLE_ANOMALY`, `FALSE_POSITIV
 .agents/            shared coding-agent context and skills
 .github/            Copilot instructions (CI workflows planned)
 data/input/         source CSVs
-database/           migrations (goose) and queries (sqlc) — planned
+database/           migrations (goose); queries (sqlc) from Phase 03
 docs/               product, architecture, ADRs, AI, design, phases, quality, testing, performance
-src/backend/        Go API — planned
+src/backend/        Go module: API, migrate and seed commands
 src/frontend/       Next.js app — planned
-tests/integration/  real-PostgreSQL and cross-component tests — planned
 tests/e2e/          Playwright journeys — planned
+compose.yaml        local PostgreSQL runtime
+.env.example        local-only placeholder configuration
 AGENTS.md           engineering instruction router for contributors and agents
 ```
 
@@ -78,7 +79,7 @@ AGENTS.md           engineering instruction router for contributors and agents
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 00 | Repository, agent, and engineering governance foundation | Complete |
-| 01 | Runtime foundation, PostgreSQL, verified idempotent dataset ingestion | Planned |
+| 01 | Runtime foundation, PostgreSQL, verified idempotent dataset ingestion | Complete |
 | 02 | Deterministic, evidence-producing anomaly engine | Planned |
 | 03 | Versioned, documented API with persisted analysis runs | Planned |
 | 04 | Responsive product UI in the canonical visual language | Planned |
@@ -97,9 +98,57 @@ The product follows [the design contract](docs/design/design-system.md), which a
 
 ## Local Development
 
-*To be completed during bootstrap (Phases 01, 04, and 06).* The goal is a single documented mechanism that starts dependencies, migrates the database, imports the provided data, and starts backend and frontend. Prerequisites, environment variables, and commands will be documented here only once they exist and have been verified.
+Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness](docs/quality/environment-readiness.md)). Run every command from the repository root; `go -C src/backend` runs Go inside the backend module. These commands were verified in PowerShell and Bash. The frontend and a single one-command demo come in later phases (OD-19).
 
-Toolchain baseline (validated on the development machine, see [environment readiness](docs/quality/environment-readiness.md)): Go 1.27.x, Node.js 24.x LTS, pnpm 12.x, Docker Desktop with Compose, PostgreSQL 18.x via `postgres:18.6-alpine`, and optionally Ollama.
+1. Start PostgreSQL 18 (localhost:5432) and wait until it is healthy:
+
+   ```sh
+   docker compose up -d --wait
+   ```
+
+2. Point the commands at the database (local-only credentials from `compose.yaml`):
+
+   ```powershell
+   $env:DATABASE_URL = "postgres://bia:bia_local_dev@localhost:5432/bia_energy?sslmode=disable"   # PowerShell
+   ```
+
+   ```sh
+   export DATABASE_URL="postgres://bia:bia_local_dev@localhost:5432/bia_energy?sslmode=disable"    # Bash/zsh
+   ```
+
+3. Create the schema, then import `data/input/readings.csv` and `events.csv`. Re-running either command is safe:
+
+   ```sh
+   go -C src/backend run ./cmd/migrate up
+   go -C src/backend run ./cmd/seed
+   ```
+
+   `migrate status` lists migrations and `migrate down` rolls back the latest one. The import validates both files before writing, loads them in one transaction and reports inserted, updated and unchanged rows.
+
+4. Start the API (default `HTTP_ADDR=:8080`; set `LOG_LEVEL=debug` for more output) and check it:
+
+   ```sh
+   go -C src/backend run ./cmd/api
+   curl http://localhost:8080/healthz   # {"status":"ok"}: the process is alive
+   curl http://localhost:8080/readyz    # {"status":"ready",...}: PostgreSQL reachable, otherwise 503
+   ```
+
+5. Run the tests:
+
+   ```sh
+   go -C src/backend test ./...                     # unit tests, no Docker needed
+   go -C src/backend test -tags=integration ./...   # plus integration, acceptance and black-box tests (Docker required)
+   ```
+
+   The black-box test compiles the three commands and runs them as separate processes against a disposable PostgreSQL container.
+
+6. Stop PostgreSQL. `docker compose stop` keeps the data; `docker compose down -v` deletes this project's database volume:
+
+   ```sh
+   docker compose stop
+   ```
+
+Schema and ingestion details: [data model](docs/architecture/data-model.md).
 
 ## Contributing
 

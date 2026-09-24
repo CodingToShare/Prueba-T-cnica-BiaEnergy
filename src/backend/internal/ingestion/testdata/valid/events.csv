@@ -1,0 +1,3 @@
+meter_id,event_timestamp,event_type,description
+TEST-A,2026-01-05 01:00,OPERATIONAL_CHANGE,Synthetic test event
+TEST-C,2026-01-05 02:00,UNKNOWN,Synthetic event for a meter without readings

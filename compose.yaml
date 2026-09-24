@@ -1,0 +1,26 @@
+# Local development runtime. Phase 01 provides PostgreSQL only; the Go
+# commands run on the host. Credentials below are local-only defaults and can
+# be overridden through a .env file (see .env.example).
+name: bia-energy
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bia_energy}
+      POSTGRES_USER: ${POSTGRES_USER:-bia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bia_local_dev}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 images keep PGDATA under /var/lib/postgresql/18/docker.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  postgres-data:

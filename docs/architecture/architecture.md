@@ -102,7 +102,7 @@ Versioned under `/api/v1` and described with OpenAPI 3 (TD-03). Minimum surface:
 
 ## 8. Persistence
 
-Relational tables for meters, readings, events, analysis runs, and anomalies; JSONB only for evidence detail. Columns that are filtered, sorted, or aggregated are real columns. Indexes follow query shapes (`docs/performance/data-query-strategy.md`). Migrations: goose. Queries: sqlc. Ingestion is idempotent and never modifies source files.
+Relational tables for meters, readings, events (Phase 01, see [data model](data-model.md)), analysis runs, and anomalies (Phase 03); JSONB only for evidence detail. Columns that are filtered, sorted, or aggregated are real columns. Indexes follow query shapes (`docs/performance/data-query-strategy.md`). Migrations: goose, run by `cmd/migrate`. Queries: sqlc from Phase 03. Source observation times are timezone-naive (ADR-008). Ingestion is idempotent and never modifies source files.
 
 ## 9. Observability
 
@@ -122,7 +122,7 @@ Relational tables for meters, readings, events, analysis runs, and anomalies; JS
 
 ## 11. Security Posture
 
-Intentionally minimal authentication for the challenge (OD-12). Configuration and secrets come from environment variables. SQL is parameterized through sqlc. CORS is restricted to the frontend origin. The LLM receives only structured evidence, never raw credentials or unrelated data.
+Intentionally minimal authentication for the challenge (OD-12). Configuration and secrets come from environment variables. SQL is always parameterized (sqlc, or explicit pgx statements for ingestion). CORS is restricted to the frontend origin. The LLM receives only structured evidence, never raw credentials or unrelated data.
 
 ## 12. Scalability And Evolution Paths (Not Implemented)
 

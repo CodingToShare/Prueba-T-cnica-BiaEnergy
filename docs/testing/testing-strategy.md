@@ -27,7 +27,8 @@ Three complementary levels; none replaces another.
 | Level | Purpose | Tools | Location |
 | --- | --- | --- | --- |
 | Unit | Isolated deterministic behavior, fast feedback | Go `testing` (+ testify where clearer); Vitest + Testing Library | Beside the code (`*_test.go`, `*.test.ts(x)`) |
-| Integration | Real boundaries: PostgreSQL, HTTP + DB, ingestion | testcontainers-go + PostgreSQL | `tests/integration/` (or package tests behind a build tag when tightly coupled) |
+| Integration | Real boundaries: PostgreSQL, HTTP + DB, ingestion | testcontainers-go + PostgreSQL | Beside the package, `*_integration_test.go` with the `integration` build tag (Go packages cannot live outside the module) |
+| Functional (backend black-box) | Compiled commands as separate processes over real HTTP and PostgreSQL | Go `os/exec` + testcontainers (`integration` tag) | `src/backend/functional/` |
 | Functional / E2E | Consumer-visible behavior through the real stack | Playwright | `tests/e2e/` |
 
 Avoid duplicating the same assertion matrix across all levels: prove logic at unit level, prove wiring and data semantics at integration level, prove the journey at E2E level.
@@ -46,6 +47,8 @@ Real PostgreSQL via testcontainers-go whenever database semantics are under test
 ## 6. API Integration Strategy
 
 Start the real HTTP handler stack against a real database. Verify status codes, response shapes against OpenAPI, validation errors, not-found, consistent error body without internals, filtering/sorting/pagination, analysis-run lifecycle including failure, health and readiness. Phase 03 also provides an API-level functional acceptance flow (trigger analysis → poll to completion → list anomalies in priority order → fetch M-109 detail with evidence) before any UI exists.
+
+Integration tests run packages in parallel. On Windows, the shared `pgtest` helper sets `DOCKER_HOST` to the Docker SDK default when it is unset, because testcontainers' default Docker detection is unreliable under concurrency there (Phase 01 audit). The race detector needs cgo; on Windows without a C compiler, run `go test -race` in the official `golang` Linux container.
 
 ## 7. Frontend / Component Strategy
 
@@ -111,4 +114,4 @@ By Phase 06 the full suite and the documented startup (dependencies → migrate 
 
 ## Current State
 
-Phase 00 contains no product code and therefore no product tests. Its validation is repository and documentation checks recorded in its phase document.
+Phase 00 has no product tests (its validation is repository and documentation checks). Phase 01 established the first suites: unit tests (`go -C src/backend test ./...`) and integration, acceptance and functional tests against real PostgreSQL (`go -C src/backend test -tags=integration ./...`). Results are recorded in the Phase 01 document.

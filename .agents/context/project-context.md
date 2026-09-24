@@ -11,7 +11,7 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phase 00 (repository and governance foundation) is the only completed phase. **No application code exists yet.** Phase 01 onward is Planned / Not Started and requires explicit user authorization. See `docs/phases/roadmap.md`.
+Phases 00 and 01 are Complete. Phase 01 delivered the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import of the supplied dataset. **No analytics, product API or frontend exist yet.** Phase 02 onward requires explicit user authorization. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
 
 ## How Agents Work Here
 
@@ -45,9 +45,10 @@ Pragmatic modular monolith (ADR-001).
 
 - `data/input/readings.csv`: 12 meters (M-101…M-112), 14 days (2026-09-01 00:00 → 2026-09-14 23:00), hourly, 4,032 rows. Columns: `meter_id, timestamp, consumption_kwh, voltage_v, current_a, power_factor, status`.
 - `data/input/events.csv`: known events. Columns: `meter_id, event_timestamp, event_type, description`. Event types seen: `OPERATIONAL_CHANGE`, `SCHEDULED_OUTAGE`, `UNKNOWN`, `DATA_QUALITY`. Timestamps are minute-precision (different format from readings). Event duration, when present, appears only in free-text descriptions.
-- The source `status` column did not flag the electrically inconsistent readings during inspection; it is `source_status`, not the analytical health.
+- The source `status` column is `OK` for all 4,032 rows, including the electrically inconsistent ones (verified in Phase 01); it is `source_status`, not the analytical health.
+- Source timestamps are timezone-naive and stored as `timestamp without time zone` (ADR-008).
 - `expected_results.csv` is **evaluator-only**. Never create, search for, or use it.
-- The CSVs must be placed by a person; they are not generated. See `data/input/README.md`.
+- The CSVs are in `data/input/` (byte-identical to the supplied files; hashes in `data/input/README.md`). Never modify or regenerate them.
 
 ## Acceptance Scenarios (tests, never code branches)
 
@@ -74,7 +75,7 @@ Microservices, brokers, Redis, Kubernetes, Elasticsearch, TimescaleDB, event sou
 .agents/            agent context and skills (shared governance)
 .github/            Copilot entry point (CI workflows come in Phase 06)
 data/input/         source CSVs (placed by a person; never modified)
-database/           migrations/ (goose) and queries/ (sqlc), from Phase 01
+database/           migrations/ (goose, since Phase 01) and queries/ (sqlc, from Phase 03)
 docs/adr/           accepted architecture decisions
 docs/ai/            PRODUCT analytics and explainability design
 docs/architecture/  system architecture
@@ -84,9 +85,8 @@ docs/phases/        roadmap and phase contracts/evidence
 docs/product/       requirements, rules, decisions, scope, traceability
 docs/quality/       Definition of Done
 docs/testing/       testing strategy
-src/backend/        Go API (from Phase 01)
+src/backend/        Go module: cmd/api, cmd/migrate, cmd/seed, internal/* (since Phase 01)
 src/frontend/       Next.js app (from Phase 04)
-tests/integration/  cross-component and real PostgreSQL tests
 tests/e2e/          Playwright journeys
 ```
 

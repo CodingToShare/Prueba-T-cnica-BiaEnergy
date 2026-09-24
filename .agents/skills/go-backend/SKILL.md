@@ -18,7 +18,7 @@ Serve the versioned API, orchestrate analysis runs (ADR-007), and compose platfo
 - Handlers: decode, validate shape, call a service, encode. No business/analytics rules or SQL in handlers.
 - `context.Context` first parameter on I/O; honor cancellation and timeouts.
 - Errors: wrap with `%w`; map to HTTP centrally to the standard error body; never expose internals.
-- Persistence through sqlc-generated code over pgx; transactions where multiple writes must be atomic (run results).
+- Persistence through sqlc-generated code over pgx for product queries (from Phase 03); explicit parameterized pgx batches for bulk ingestion (TD-18); transactions where multiple writes must be atomic.
 - Interfaces declared by consumers, only at meaningful boundaries (persistence when it aids testing, `ExplanationProvider`, `Clock`).
 - `slog` structured logging with request/run ids; config from environment with validation at startup.
 - Background runs: bounded context, persisted progress, `FAILED` on error, recovery of orphaned runs at startup, cancellation on shutdown.

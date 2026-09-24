@@ -18,7 +18,7 @@ Guidance for data access as the implementation grows. The dataset is small (4,03
 - Avoid N+1: list endpoints fetch aggregates in one query (joins, lateral joins, or pre-aggregated CTEs), not one query per meter.
 - Select only needed columns; no `SELECT *` in application queries.
 - Paginate lists that can grow (anomalies, readings ranges); the 12-meter list may stay unpaginated until volume says otherwise.
-- Time ranges are half-open (`>= start AND < end`) on `timestamptz`.
+- Time ranges are half-open (`>= start AND < end`) on the timezone-naive source timestamps (ADR-008).
 - Indexes are driven by real queries: `(meter_id, timestamp)` on readings from the start; add others (e.g., anomalies by run and priority) when a query needs them, verified with `EXPLAIN`.
 - Store derived analysis results rather than recomputing them per request.
 

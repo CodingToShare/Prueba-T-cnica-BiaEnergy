@@ -16,9 +16,9 @@ Load `readings.csv` and `events.csv` exactly and reproducibly, and surface data 
 ## Required Rules
 
 - Treat `data/input/` as read-only; never modify, reformat, or regenerate source files.
-- Validate headers, types, ranges, and timestamp formats (readings and events use different formats); detect duplicates and gaps; report counts and distributions.
+- Validate headers, types and timestamp formats (readings and events use different formats); detect duplicates and gaps; report counts and distributions. Reject only malformed data; never reject physically unusual values (they are analytical signals).
 - Store CSV `status` as `source_status`; never interpret it as analytical health.
-- Interpret timestamps per AS-02 until resolved; keep the rule in one place.
+- Source timestamps are timezone-naive wall clocks (ADR-008), applied only in `ingestion.ParseSourceTimestamp`.
 - Loads are idempotent (natural keys + upsert or truncate-and-load within a transaction) and fail loudly on malformed required fields.
 - Stream rows; keep memory bounded even though the dataset is small.
 

@@ -11,7 +11,7 @@ The platform stores meters, hourly readings, events, analysis runs, anomalies, a
 
 - PostgreSQL is the single source of truth.
 - Initial relational concepts: `meters`, `readings`, `events`, `analysis_runs`, `anomalies`. Exact schema is defined in Phase 01 (source data) and Phase 03 (analysis results).
-- Timestamps use `timestamptz`.
+- Timestamps use `timestamptz`. Amended by ADR-008: source observation times are timezone-naive `timestamp` values.
 - Structured anomaly evidence may use JSONB where flexibility is valuable. Fields that are filtered, sorted, joined, or aggregated (meter, run, classification, severity, confidence, priority, status, timestamps) are proper columns.
 - Indexes follow real query shapes, starting with `(meter_id, timestamp)` for readings; others are added when an actual query needs them (`docs/performance/data-query-strategy.md`).
 - Integration tests run against real PostgreSQL via testcontainers-go.

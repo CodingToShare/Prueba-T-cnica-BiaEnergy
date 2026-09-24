@@ -17,7 +17,7 @@ Report concrete findings ordered by severity with file locations. Verify behavio
 
 - **Analytics integrity:** no branching on meter IDs, timestamps, or dataset literals; no reference to `expected_results.csv`; thresholds only in the engine configuration; the LLM never sets type/severity/confidence/evidence.
 - **Boundaries:** thin handlers, pure engine, no analytics in the frontend, interfaces only at real boundaries.
-- **Data access:** SQL-side filtering/sorting, no N+1, parameterized sqlc queries, correct `timestamptz` handling, indexes matching queries.
+- **Data access:** SQL-side filtering/sorting, no N+1, parameterized queries (sqlc or explicit pgx), timezone-naive source times vs `timestamptz` system instants (ADR-008), indexes matching queries.
 - **Errors and security:** standard error body, no leaked internals, no secrets, validated input, safe logs.
 - **Frontend:** loading/empty/error/retry states, accessibility, responsiveness, design tokens.
 - **Tests:** changed risk is covered at the right level (unit/integration/functional); focused and regression commands actually run and pass; nothing skipped or weakened silently.

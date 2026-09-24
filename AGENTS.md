@@ -73,7 +73,7 @@ Do not introduce any item listed in `docs/product/out-of-scope.md` (microservice
 - Interfaces only at meaningful boundaries: persistence where it adds testability, `ExplanationProvider`, `Clock` when time must be deterministic. Define interfaces where they are consumed.
 - Propagate `context.Context` through every I/O call. Wrap errors with context; map them to HTTP centrally with a consistent error body.
 - Structured logging with `slog`; never log secrets or full request bodies.
-- Store timestamps as `timestamptz`; handle time explicitly.
+- Source observation times are timezone-naive `timestamp` values holding the source wall clock (ADR-008); system-generated instants use `timestamptz`. Never invent or convert a zone.
 
 ## 6. Frontend Standards (Next.js)
 
@@ -103,7 +103,7 @@ Do not introduce any item listed in `docs/product/out-of-scope.md` (microservice
 
 ## 9. Testing Standards
 
-Follow `docs/testing/testing-strategy.md`. **Testing is continuous, not deferred to Phase 06**: every phase adds unit, integration, and (once a frontend exists) functional tests for its own behavior and reruns the previously applicable regression suite. Sequence: Implement → Validate → Review → Document → Complete. Test behavior and risk; avoid coverage theater and excessive mocking. The main suite never depends on a live LLM. Go unit tests live beside the package (`*_test.go`); frontend unit tests live beside the code; `tests/integration/` holds cross-component and real-PostgreSQL tests; `tests/e2e/` holds Playwright journeys. The four acceptance scenarios must be verified semantically once the engine exists.
+Follow `docs/testing/testing-strategy.md`. **Testing is continuous, not deferred to Phase 06**: every phase adds unit, integration, and (once a frontend exists) functional tests for its own behavior and reruns the previously applicable regression suite. Sequence: Implement → Validate → Review → Document → Complete. Test behavior and risk; avoid coverage theater and excessive mocking. The main suite never depends on a live LLM. Go unit tests live beside the package (`*_test.go`); Go integration tests (real PostgreSQL via testcontainers) also live beside their package, behind the `integration` build tag (TD-20); frontend unit tests live beside the code; `tests/e2e/` holds Playwright journeys. The four acceptance scenarios must be verified semantically once the engine exists.
 
 ## 10. Phase Governance
 
@@ -125,13 +125,13 @@ Gates (defined in `docs/phases/roadmap.md`): phase authorization, entry, scope, 
 ## 12. Security And Secrets
 
 - No secrets, credentials, tokens, or personal data in the repository. Configuration comes from environment variables; commit only `.env.example` with placeholders.
-- Parameterized SQL only (sqlc-generated queries). Validate all external input at the boundary.
+- Parameterized SQL only: sqlc-generated queries for product data access (from Phase 03); explicit parameterized pgx statements for bulk ingestion (TD-18). Never build SQL from strings. Validate all external input at the boundary.
 - Do not expose stack traces or internal errors to clients.
 - Authentication stays intentionally simple for the challenge; do not build OAuth/OIDC/RBAC.
 
 ## 13. Delivery
 
-Docker and Docker Compose are the intended local runtime; GitHub Actions is the intended CI. Neither exists yet; each is introduced by its planned phase. By Phase 06 an evaluator must be able to start dependencies, migrate, import the provided data, and start backend and frontend without manually repairing state (FR-DEL-002; entry point OD-19). Never document a command before it exists and works. Pin dependency versions when they are first introduced, not before. Prefer Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
+Docker Compose (`compose.yaml`, PostgreSQL since Phase 01) is the local runtime; GitHub Actions is the intended CI (Phase 06). By Phase 06 an evaluator must be able to start dependencies, migrate, import the provided data, and start backend and frontend without manually repairing state (FR-DEL-002; entry point OD-19). Never document a command before it exists and works. Pin dependency versions when they are first introduced, not before. Prefer Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
 
 ## 14. Agent Configuration Files
 
