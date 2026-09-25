@@ -11,13 +11,14 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phases 00–03 are Complete.
+Phases 00–04 are Complete. Phase 04 passed an independent frontend/UX audit and remains uncommitted.
 
 - **Phase 01:** the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import.
 - **Phase 02:** the pure deterministic anomaly engine `internal/analysis`.
 - **Phase 03:** the versioned API (`docs/api/openapi.yaml`) with demo login, PostgreSQL-backed background analysis runs (ADR-009), persisted findings and evidence, and meter, anomaly and dashboard endpoints.
+- **Phase 04:** the Next.js product UI: login, dashboard, meters, charts, analysis progress, anomalies and evidence-based investigation; independent audit evidence is recorded in its phase document.
 
-**No frontend or explanation provider exists yet.** Phase 04 onward requires explicit user authorization. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
+**No explanation provider exists yet.** Phase 05 is not authorized or started. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
 
 ## How Agents Work Here
 
@@ -92,8 +93,7 @@ docs/product/       requirements, rules, decisions, scope, traceability
 docs/quality/       Definition of Done
 docs/testing/       testing strategy
 src/backend/        Go module: cmd/api, cmd/migrate, cmd/seed, internal/* (since Phase 01)
-src/frontend/       Next.js app (from Phase 04)
-tests/e2e/          Playwright journeys
+src/frontend/       Next.js app (since Phase 04); Playwright journeys in src/frontend/e2e (TD-29)
 ```
 
 ## Where Canonical Rules Live

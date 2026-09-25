@@ -29,7 +29,7 @@ Three complementary levels; none replaces another.
 | Unit | Isolated deterministic behavior, fast feedback | Go `testing` (+ testify where clearer); Vitest + Testing Library | Beside the code (`*_test.go`, `*.test.ts(x)`) |
 | Integration | Real boundaries: PostgreSQL, HTTP + DB, ingestion | testcontainers-go + PostgreSQL | Beside the package, `*_integration_test.go` with the `integration` build tag (Go packages cannot live outside the module) |
 | Functional (backend black-box) | Compiled commands as separate processes over real HTTP and PostgreSQL | Go `os/exec` + testcontainers (`integration` tag) | `src/backend/functional/` |
-| Functional / E2E | Consumer-visible behavior through the real stack | Playwright | `tests/e2e/` |
+| Functional / E2E | Consumer-visible behavior through the real stack | Playwright | `src/frontend/e2e/` (TD-29), run with `pnpm test:e2e` |
 
 Avoid duplicating the same assertion matrix across all levels: prove logic at unit level, prove wiring and data semantics at integration level, prove the journey at E2E level.
 
@@ -54,9 +54,13 @@ Integration tests run packages in parallel. On Windows, the shared `pgtest` help
 
 Vitest + Testing Library for component states (loading, empty, error with retry, not analyzed, disabled), interactions (filters, sort, search, run analysis), and accessibility basics (roles, labels, focus). Mock the network at the HTTP boundary only in component tests; E2E uses the real API.
 
+Since Phase 04: component tests replace `fetch` with a small route table (`src/frontend/test/api-fake.ts`) and render with the application's QueryClient. Most tests disable retries for speed; provider-policy and browser tests exercise production retries. `next/navigation` is replaced with router spies, investigation tests replace the separately tested chart, and the chart-lifecycle test substitutes only ECharts and ResizeObserver. Fixtures are fictional payloads (`TST-*` meter IDs), never the challenge data.
+
 ## 8. Playwright Strategy
 
 Real frontend → real API → real PostgreSQL in the main acceptance path; no mocked backend there.
+
+Since Phase 04, `pnpm test:e2e` (`src/frontend/e2e/run-e2e.mjs`) starts a disposable `postgres:18.6-alpine` container, runs the compiled `migrate`, `seed` and `api` commands with random test-only credentials, builds and starts the production frontend on free ports, runs Playwright and removes everything, also on failure. Projects: `desktop` (1440×900, golden path and invalid login) runs first on the fresh database; `audit` adds authentication, filtering, chart-fidelity and long-content checks; `mobile` (390×844) and `tablet` (768×1024) verify the narrow journey. After Playwright, the runner stops and restarts the actual API to prove the dashboard's safe error/retry path. Every spec fails on browser console errors/warnings, page errors, failed requests and unexpected HTTP errors, apart from exact method/path/status failures the scenario intentionally provokes.
 
 - **Critical flow:** Login → Dashboard → Run AI Analysis → inspect anomalies → open M-109 → inspect evidence → understand explanation → see recommended action.
 - **Additional high-value flows:** search/filter meters, meter detail navigation, anomaly filtering, analysis progress, recoverable API error, responsive navigation.

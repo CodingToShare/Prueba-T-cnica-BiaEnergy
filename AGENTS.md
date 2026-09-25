@@ -103,7 +103,7 @@ Do not introduce any item listed in `docs/product/out-of-scope.md` (microservice
 
 ## 9. Testing Standards
 
-Follow `docs/testing/testing-strategy.md`. **Testing is continuous, not deferred to Phase 06**: every phase adds unit, integration, and (once a frontend exists) functional tests for its own behavior and reruns the previously applicable regression suite. Sequence: Implement → Validate → Review → Document → Complete. Test behavior and risk; avoid coverage theater and excessive mocking. The main suite never depends on a live LLM. Go unit tests live beside the package (`*_test.go`); Go integration tests (real PostgreSQL via testcontainers) also live beside their package, behind the `integration` build tag (TD-20); frontend unit tests live beside the code; `tests/e2e/` holds Playwright journeys. The four acceptance scenarios must be verified semantically once the engine exists.
+Follow `docs/testing/testing-strategy.md`. **Testing is continuous, not deferred to Phase 06**: every phase adds unit, integration, and (once a frontend exists) functional tests for its own behavior and reruns the previously applicable regression suite. Sequence: Implement → Validate → Review → Document → Complete. Test behavior and risk; avoid coverage theater and excessive mocking. The main suite never depends on a live LLM. Go unit tests live beside the package (`*_test.go`); Go integration tests (real PostgreSQL via testcontainers) also live beside their package, behind the `integration` build tag (TD-20); frontend unit/component tests live beside the code; `src/frontend/e2e/` holds the Playwright journeys (TD-29). The four acceptance scenarios must be verified semantically once the engine exists.
 
 ## 10. Phase Governance
 

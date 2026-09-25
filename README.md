@@ -67,8 +67,7 @@ data/input/         source CSVs
 database/           migrations (goose); queries (sqlc) from Phase 03
 docs/               product, architecture, ADRs, AI, design, phases, quality, testing, performance
 src/backend/        Go module: API, migrate and seed commands
-src/frontend/       Next.js app — planned
-tests/e2e/          Playwright journeys — planned
+src/frontend/       Next.js app (App Router); Playwright journeys in src/frontend/e2e
 compose.yaml        local PostgreSQL runtime
 .env.example        local-only placeholder configuration
 AGENTS.md           engineering instruction router for contributors and agents
@@ -82,7 +81,7 @@ AGENTS.md           engineering instruction router for contributors and agents
 | 01 | Runtime foundation, PostgreSQL, verified idempotent dataset ingestion | Complete |
 | 02 | Deterministic, evidence-producing anomaly engine | Complete (audited; non-blocking limitations documented) |
 | 03 | Versioned, documented API with persisted analysis runs | Complete |
-| 04 | Responsive product UI in the canonical visual language | Planned (not started) |
+| 04 | Responsive product UI in the canonical visual language | Complete |
 | 05 | Grounded explanation and investigation experience | Planned |
 | 06 | Complete regression, observability, reproducible delivery, CI, demo | Planned |
 
@@ -98,7 +97,7 @@ The product follows [the design contract](docs/design/design-system.md), which a
 
 ## Local Development
 
-Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness](docs/quality/environment-readiness.md)). Run every command from the repository root; `go -C src/backend` runs Go inside the backend module. These commands were verified in PowerShell and Bash. The frontend and a single one-command demo come in later phases (OD-19).
+Prerequisites: Go 1.27.x, Docker with Compose v2, Node.js 24 and pnpm 12 (see [environment readiness](docs/quality/environment-readiness.md)). Run every command from the repository root unless a step says otherwise; `go -C src/backend` runs Go inside the backend module. These commands were verified in PowerShell and Bash. A single one-command demo comes in Phase 06 (OD-19).
 
 1. Start PostgreSQL 18 (localhost:5432) and wait until it is healthy:
 
@@ -164,12 +163,34 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
 
    Every route, parameter and response is documented in [docs/api/openapi.yaml](docs/api/openapi.yaml). `cookies.txt` holds a session cookie: delete it afterwards.
 
-5. Run the tests:
+5. Start the frontend in a third terminal, with the API from step 4 running. Next.js serves the UI and forwards `/api/v1/*` to `BACKEND_URL` (server-only, default `http://localhost:8080`; read at development startup or production build time), so the browser talks to one origin:
+
+   ```sh
+   cd src/frontend
+   pnpm install --frozen-lockfile
+   pnpm dev                       # http://localhost:3000 — sign in with DEMO_AUTH_USERNAME / DEMO_AUTH_PASSWORD
+   ```
+
+   Another backend address: `$env:BACKEND_URL = "http://localhost:9090"` (PowerShell) or `BACKEND_URL=http://localhost:9090 pnpm dev` (Bash). A production build is `pnpm build` followed by `pnpm start`; `BACKEND_URL` must be set before `pnpm build`.
+
+6. Run the tests:
 
    ```sh
    go -C src/backend test ./...                     # unit tests and the analytics acceptance suite, no Docker needed
    go -C src/backend test -tags=integration ./...   # plus integration, acceptance and black-box tests (Docker required)
    ```
+
+   Frontend checks, from `src/frontend`:
+
+   ```sh
+   pnpm lint
+   pnpm typecheck
+   pnpm test                                  # Vitest unit and component tests
+   pnpm exec playwright install chromium      # once
+   pnpm test:e2e                              # Playwright on the real stack (Docker and Go required)
+   ```
+
+   `pnpm test:e2e` starts its own disposable PostgreSQL container, migrates and seeds it, runs the compiled API with random test-only credentials, builds and starts the frontend on free ports, runs the desktop golden path, authentication/filter/chart audits and mobile/tablet journeys, then verifies recovery after actually stopping and restarting its API. It removes its processes and container afterwards and does not touch the Compose database. Screenshots are written to `src/frontend/test-results/` (ignored by Git). The runner is a Node script, with no Unix-shell dependency; this audit executed it on Windows. The first production build needs network access to download the self-hosted Plus Jakarta Sans font.
 
    The black-box tests compile the three commands and run them as separate processes against a disposable PostgreSQL container, including the authenticated analysis flow over real HTTP.
 
@@ -180,7 +201,7 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
    docker run --rm -v "${PWD}:/src" -w /src sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537 generate     # PowerShell
    ```
 
-6. Stop PostgreSQL. `docker compose stop` keeps the data; `docker compose down -v` deletes this project's database volume:
+7. Stop PostgreSQL. `docker compose stop` keeps the data; `docker compose down -v` deletes this project's database volume:
 
    ```sh
    docker compose stop

@@ -509,7 +509,7 @@ components:
         started_at: { $ref: "#/components/schemas/SourceTime" }
         last_observed_at: { $ref: "#/components/schemas/SourceTime" }
         duration_hours: { type: number }
-        variation_pct: { type: number, description: Observed vs baseline energy over the episode, in percent. }
+        variation_pct: { type: number, description: "Observed vs baseline energy over the episode, in percent." }
         reason: { type: string, description: Deterministic one-sentence summary built only from the evidence. }
         recommended_action: { $ref: "#/components/schemas/RecommendedAction" }
     AnomalyList:
@@ -658,7 +658,7 @@ components:
         total_consumption_kwh: { type: number, description: Sum over all readings of the period. }
         period: { oneOf: [{ $ref: "#/components/schemas/Period" }, { type: "null" }] }
         anomalies: { type: integer, description: Findings of the latest completed run (all types). }
-        high_priority: { type: integer, description: Of those, findings with severity HIGH. }
+        high_priority: { type: integer, description: "Of those, findings with severity HIGH." }
         aggregate_confidence: { type: [number, "null"], description: Mean confidence of those findings; null before any completed run or without findings. }
         latest_analysis: { oneOf: [{ $ref: "#/components/schemas/AnalysisRef" }, { type: "null" }] }
         active_analysis:
