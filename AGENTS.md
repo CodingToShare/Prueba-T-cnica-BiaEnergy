@@ -49,7 +49,7 @@ Before editing code, identify and state: the active authorized phase (`docs/phas
 | --- | --- | --- |
 | Product behavior, scope, priorities | `docs/product/*` | `documentation` |
 | Module boundaries, dependencies, new libraries | `docs/architecture/architecture.md`, `docs/adr/*` | `architecture` |
-| Go API, handlers, services, orchestration | ADR-002, ADR-007, architecture | `go-backend` |
+| Go API, handlers, services, orchestration | ADR-002, ADR-007, ADR-009, architecture, `docs/api/openapi.yaml` | `go-backend` |
 | Schema, migrations, queries, indexes | ADR-003, `docs/performance/data-query-strategy.md` | `postgresql` |
 | CSV loading, validation, seeding | `data/input/README.md`, architecture | `data-ingestion` |
 | Baselines, detection, classification, severity, confidence | ADR-004, `docs/ai/anomaly-analysis.md` | `analytics-engine` |

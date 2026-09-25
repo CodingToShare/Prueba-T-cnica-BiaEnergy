@@ -1,6 +1,6 @@
 # ADR-007: Lightweight Background Analysis Execution
 
-- Status: Accepted
+- Status: Accepted; amended by ADR-009 (PostgreSQL-backed queue, truthful coarse stages, startup recovery of RUNNING runs only, one active run)
 - Date: 2026-09-24
 
 ## Context

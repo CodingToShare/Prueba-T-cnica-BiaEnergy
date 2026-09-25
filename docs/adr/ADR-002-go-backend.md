@@ -24,13 +24,15 @@ src/backend/
     config/       environment configuration        (Phase 01)
     ingestion/    CSV parsing, validation, loading (Phase 01)
     workspace/    locates data/input and database/migrations (Phase 01)
-    meter/        meter queries and computed status
-    reading/      reading queries and time ranges
-    event/        operational events
-    anomaly/      anomaly persistence and queries
-    analysis/     analysis engine (pure, Phase 02) and run orchestration (Phase 03)
-    dashboard/    summary aggregation
-    platform/     postgres (pool, migrations), health (Phase 01); HTTP helpers, metrics later
+    analysis/     analysis engine, pure (Phase 02)
+    analysisrun/  run queue, background worker, result persistence (Phase 03)
+    auth/         demo login and signed session cookie (Phase 03)
+    httpapi/      /api/v1 router, middleware, validation, DTOs (Phase 03)
+    meter/        meter list, detail and reading history (Phase 03; readings live here)
+    anomaly/      persisted findings and evidence (Phase 03)
+    dashboard/    summary aggregation (Phase 03)
+    platform/     postgres (pool, migrations, sqlc code in dbgen), health, jsontime
+                  (source vs system time JSON); metrics later
 ```
 
 - Handlers are thin. Business and analytics rules live in services and the engine.

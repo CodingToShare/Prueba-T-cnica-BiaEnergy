@@ -40,8 +40,8 @@ func TestMigrations_EmptyDatabase_UpDownUp(t *testing.T) {
 
 	applied, err := m.Up(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []int64{1}, applied)
-	assert.Equal(t, []string{"events", "meters", "readings"}, tableNames(t, db.Pool))
+	assert.Equal(t, []int64{1, 2}, applied)
+	assert.Equal(t, allTables, tableNames(t, db.Pool))
 
 	again, err := m.Up(ctx)
 	require.NoError(t, err)
@@ -49,14 +49,24 @@ func TestMigrations_EmptyDatabase_UpDownUp(t *testing.T) {
 
 	rolledBack, err := m.Down(ctx)
 	require.NoError(t, err)
+	assert.Equal(t, int64(2), rolledBack)
+	assert.Equal(t, sourceTables, tableNames(t, db.Pool), "down removes only the analysis tables; source data stays")
+
+	rolledBack, err = m.Down(ctx)
+	require.NoError(t, err)
 	assert.Equal(t, int64(1), rolledBack)
 	assert.Empty(t, tableNames(t, db.Pool), "down removes every Phase 01 table")
 
 	reapplied, err := m.Up(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []int64{1}, reapplied)
-	assert.Equal(t, []string{"events", "meters", "readings"}, tableNames(t, db.Pool))
+	assert.Equal(t, []int64{1, 2}, reapplied)
+	assert.Equal(t, allTables, tableNames(t, db.Pool))
 }
+
+var (
+	sourceTables = []string{"events", "meters", "readings"}
+	allTables    = []string{"analysis_meter_results", "analysis_runs", "anomalies", "events", "meters", "readings"}
+)
 
 func TestMigrations_SchemaMatchesSourceContract(t *testing.T) {
 	db := pgtest.StartMigrated(t)

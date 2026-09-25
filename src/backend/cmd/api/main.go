@@ -1,5 +1,6 @@
-// Command api runs the Bia Energy HTTP service. In Phase 01 it exposes only
-// the operational endpoints /healthz and /readyz.
+// Command api runs the Bia Energy HTTP service: the versioned product API
+// (/api/v1), the operational endpoints /healthz and /readyz, and the
+// in-process analysis worker.
 package main
 
 import (
@@ -11,10 +12,18 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"bia-energy.local/backend/internal/analysis"
+	"bia-energy.local/backend/internal/analysisrun"
+	"bia-energy.local/backend/internal/anomaly"
+	"bia-energy.local/backend/internal/auth"
 	"bia-energy.local/backend/internal/config"
+	"bia-energy.local/backend/internal/dashboard"
+	"bia-energy.local/backend/internal/httpapi"
+	"bia-energy.local/backend/internal/meter"
 	"bia-energy.local/backend/internal/platform/postgres"
 )
 
@@ -24,7 +33,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	cfg, err := config.Load(os.Getenv)
+	cfg, err := config.LoadAPI(os.Getenv)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "configuration error:\n%v\n", err)
 		os.Exit(2)
@@ -37,10 +46,14 @@ func main() {
 	}
 }
 
-// run serves HTTP until ctx is cancelled, then shuts down gracefully.
-// onListening, when non-nil, receives the bound address (used by tests that
-// listen on port 0).
-func run(ctx context.Context, cfg config.Config, logger *slog.Logger, onListening func(net.Addr)) error {
+// run serves HTTP and runs the analysis worker until ctx is cancelled, then
+// stops accepting requests, stops the worker and returns. onListening, when
+// non-nil, receives the bound address (used by tests that listen on port 0).
+func run(ctx context.Context, cfg config.APIConfig, logger *slog.Logger, onListening func(net.Addr)) error {
+	authManager, err := auth.NewManager(cfg.Auth, nil)
+	if err != nil {
+		return err
+	}
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return err
@@ -48,19 +61,52 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger, onListenin
 	defer pool.Close()
 	logger.Info("connected to PostgreSQL", "database", cfg.RedactedDatabaseURL())
 
+	engine, err := analysis.New(analysis.DefaultConfig())
+	if err != nil {
+		return err
+	}
+	runs, err := analysisrun.NewService(pool, engine, analysis.EngineVersion, engine.Config(), logger, analysisrun.Options{})
+	if err != nil {
+		return err
+	}
+	if _, err := runs.RecoverInterrupted(ctx); err != nil {
+		return err
+	}
+
 	listener, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.HTTPAddr, err)
 	}
 
 	server := &http.Server{
-		Handler:           newRouter(pool, logger),
+		Handler: httpapi.NewRouter(httpapi.Deps{
+			Logger: logger, DB: pool, Auth: authManager, Runs: runs,
+			Meters: meter.NewService(pool), Anomalies: anomaly.NewService(pool), Dashboard: dashboard.NewService(pool),
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
+
+	// The worker outlives the signal context: it is stopped explicitly after
+	// the HTTP server has stopped accepting requests.
+	workerCtx, stopWorker := context.WithCancel(context.WithoutCancel(ctx))
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		runs.Work(workerCtx)
+	}()
+	var stopOnce sync.Once
+	stopAnalysisWorker := func() {
+		stopOnce.Do(func() {
+			stopWorker()
+			<-workerDone
+			logger.Info("analysis worker stopped")
+		})
+	}
+	defer stopAnalysisWorker()
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
@@ -84,6 +130,7 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger, onListenin
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
+	stopAnalysisWorker()
 	logger.Info("shutdown complete")
 	return nil
 }

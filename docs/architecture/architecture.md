@@ -1,6 +1,6 @@
 # Architecture
 
-Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), and the pure analysis engine (Phase 02); run orchestration, the product API and the frontend are not implemented yet.
+Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), the pure analysis engine (Phase 02), and the product API with demo login, persisted analysis runs and background orchestration (Phase 03). The frontend and explanation providers are not implemented yet.
 
 ## 1. System Context
 
@@ -26,12 +26,13 @@ The dataset is small, the team is one, the deadline is three days, and no compon
 | Area | Owns | Must not |
 | --- | --- | --- |
 | Frontend (`src/frontend`) | Pages, UX states, charts, server-state caching (TanStack Query) | Contain analytics rules or compute classifications |
-| HTTP layer (`internal/*` handlers) | Routing, input decoding and validation, status codes, error body | Contain business or analytics rules; run SQL directly |
-| Services (`meter`, `reading`, `event`, `anomaly`, `dashboard`) | Use-case orchestration and queries via sqlc | Duplicate engine logic |
+| HTTP layer (`internal/httpapi`) | Routing, request IDs, request logging, session check, input validation, status codes, the error body, DTOs and time formatting | Contain business or analytics rules; run SQL directly |
+| Read services (`internal/meter`, `internal/anomaly`, `internal/dashboard`) | Current-state queries via sqlc (readings belong to `meter`; events are read by the orchestration and kept in evidence) | Duplicate engine logic or recompute findings |
 | Analysis engine (`internal/analysis`, pure) | Baselines, detection, correlation, classification, severity, confidence, evidence, priority | Access database, HTTP, clock, or network |
-| Run orchestration (`internal/analysis`) | Load inputs, invoke engine, call `ExplanationProvider`, persist progress/results | Make classification decisions |
+| Run orchestration (`internal/analysisrun`) | Queue and claim runs, load inputs from PostgreSQL, invoke the engine through the `Analyzer` boundary, persist progress and results atomically; later call the `ExplanationProvider` (Phase 05) | Make classification decisions |
+| Demo authentication (`internal/auth`) | One configured credential; signed session cookie (OD-12) | Store users, roles or sessions |
 | Explanation providers | Turn structured evidence into text | Change any computed value |
-| Platform (`internal/platform`) | Config, database pool, logging, health, metrics, error mapping | Hold product logic |
+| Platform (`internal/platform`) | Database pool, migrations, generated queries, health, source/system JSON time; metrics in Phase 06. Configuration is `internal/config`; request error mapping is `internal/httpapi` | Hold product logic |
 | PostgreSQL | Integrity, filtering, sorting, aggregation | — |
 
 Backend package layout: ADR-002.
@@ -82,23 +83,23 @@ sequenceDiagram
   participant BG as Background run
   participant DB as PostgreSQL
   UI->>API: POST /api/v1/ai/analyze
-  API->>DB: insert AnalysisRun (QUEUED)
-  API-->>UI: 202 {runId}
-  API->>BG: start goroutine(runId)
-  loop each stage
-    BG->>DB: update state/progress
-    UI->>API: GET /api/v1/ai/analysis/{runId}
-    API-->>UI: state, progress
-  end
-  BG->>DB: persist anomalies + evidence, COMPLETED (one transaction)
-  UI->>API: GET /api/v1/anomalies
+  API->>DB: insert run QUEUED (or return the active run)
+  API-->>UI: 202 {analysis_id}, Location
+  API->>BG: wake-up signal
+  BG->>DB: claim oldest QUEUED run (FOR UPDATE SKIP LOCKED) → RUNNING / LOADING_DATA
+  BG->>DB: read readings + events (one read-only snapshot; close before computation)
+  BG->>BG: engine (ANALYZING)
+  BG->>DB: meter statuses + findings + COMPLETED (one transaction, PERSISTING_RESULTS)
+  UI->>API: GET /api/v1/ai/analysis/{id} (poll)
+  API-->>UI: status, stage, progress
+  UI->>API: GET /api/v1/anomalies (latest COMPLETED run)
 ```
 
-States: `QUEUED`, `READING_DATA`, `BUILDING_BASELINES`, `DETECTING_ANOMALIES`, `CORRELATING_EVENTS`, `CLASSIFYING`, `GENERATING_EXPLANATIONS`, `COMPLETED`, `FAILED`.
+Status `QUEUED → RUNNING → COMPLETED | FAILED`. Stage `QUEUED → LOADING_DATA → ANALYZING → PERSISTING_RESULTS → COMPLETED` (or `FAILED`), progress 0/10/35/85/100 at real transitions only. There is at most one active run, and QUEUED runs survive a restart; interrupted RUNNING runs become FAILED. Details: ADR-009, which amends ADR-007.
 
 ## 7. API
 
-Versioned under `/api/v1` and described with OpenAPI 3 (TD-03). Minimum surface: `docs/product/functional-requirements.md`. Operational endpoints (health, readiness, metrics) sit outside the versioned product API. Errors use one consistent JSON body with a stable code and a safe message; no stack traces.
+Versioned under `/api/v1` and described by the canonical OpenAPI 3.1 contract [`docs/api/openapi.yaml`](../api/openapi.yaml) (TD-03). A test keeps it consistent with the router. Operational endpoints (`/healthz`, `/readyz`; `/metrics` in Phase 06) sit outside the versioned product API and are public. Every `/api/v1` route except login and logout needs the demo session cookie. Errors use one JSON body (`error.code`, `error.message`, `error.request_id`); no stack traces or internals. JSON is snake_case. Source times are written without an offset and system instants as RFC 3339 UTC.
 
 ## 8. Persistence
 
@@ -122,7 +123,7 @@ Relational tables for meters, readings, events (Phase 01, see [data model](data-
 
 ## 11. Security Posture
 
-Intentionally minimal authentication for the challenge (OD-12). Configuration and secrets come from environment variables. SQL is always parameterized (sqlc, or explicit pgx statements for ingestion). CORS is restricted to the frontend origin. The LLM receives only structured evidence, never raw credentials or unrelated data.
+Intentionally minimal authentication for the challenge (OD-12): one configured demo credential compared in constant time, and an HMAC-SHA256-signed session cookie (HttpOnly, SameSite=Lax, Secure unless disabled for local HTTP, 8 hours). There are no users, roles or server-side sessions. Configuration and secrets come from environment variables, and the API refuses to start without them. SQL is always parameterized (sqlc, or explicit pgx statements for ingestion); sort keys are whitelisted. There is no CORS middleware yet: Phase 04 prefers a same-origin proxy and would add only a narrowly configured origin if needed. The LLM receives only structured evidence, never raw credentials or unrelated data.
 
 ## 12. Scalability And Evolution Paths (Not Implemented)
 

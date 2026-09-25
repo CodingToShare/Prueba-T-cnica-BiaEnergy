@@ -15,6 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
+	"bia-energy.local/backend/internal/ingestion"
 	"bia-energy.local/backend/internal/platform/postgres"
 	"bia-energy.local/backend/internal/workspace"
 )
@@ -104,4 +105,24 @@ func Count(t *testing.T, pool *pgxpool.Pool, table string) int {
 	var n int
 	require.NoError(t, pool.QueryRow(context.Background(), "SELECT count(*) FROM "+table).Scan(&n))
 	return n
+}
+
+// StartSeeded runs a migrated container with the supplied dataset
+// (data/input) loaded through the Phase 01 ingestion.
+func StartSeeded(t *testing.T) *DB {
+	t.Helper()
+	db := StartMigrated(t)
+	Seed(t, db.Pool)
+	return db
+}
+
+// Seed loads the supplied dataset into pool.
+func Seed(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	dir, err := workspace.FindDir("data/input")
+	require.NoError(t, err)
+	ds, err := ingestion.ParseDir(dir)
+	require.NoError(t, err)
+	_, err = ingestion.Load(context.Background(), pool, ds)
+	require.NoError(t, err, "load the supplied dataset")
 }

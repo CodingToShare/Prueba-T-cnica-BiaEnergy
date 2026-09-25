@@ -93,3 +93,68 @@ func TestRedactedDatabaseURL_HidesPassword(t *testing.T) {
 		t.Fatalf("redacted URL lost host or database: %q", got)
 	}
 }
+
+var validAPIEnv = map[string]string{
+	EnvDatabaseURL:       "postgres://u:p@localhost/db",
+	EnvDemoUsername:      "demo",
+	EnvDemoPassword:      "test-only-password",
+	EnvSessionSigningKey: "test-only-signing-key-0123456789abcdef",
+}
+
+func withEnv(overrides map[string]string) func(string) string {
+	m := map[string]string{}
+	for k, v := range validAPIEnv {
+		m[k] = v
+	}
+	for k, v := range overrides {
+		m[k] = v
+	}
+	return env(m)
+}
+
+func TestLoadAPI_ValidAuthSettings_SecureCookieByDefault(t *testing.T) {
+	cfg, err := LoadAPI(withEnv(nil))
+	if err != nil {
+		t.Fatalf("LoadAPI: %v", err)
+	}
+	if cfg.Auth.Username != "demo" || !cfg.Auth.SecureCookie {
+		t.Fatalf("unexpected auth config: user %q secure %v", cfg.Auth.Username, cfg.Auth.SecureCookie)
+	}
+	if cfg.DatabaseURL == "" {
+		t.Fatal("shared configuration not loaded")
+	}
+
+	local, err := LoadAPI(withEnv(map[string]string{EnvSessionSecure: "false"}))
+	if err != nil || local.Auth.SecureCookie {
+		t.Fatalf("SESSION_COOKIE_SECURE=false must disable Secure explicitly (err %v)", err)
+	}
+}
+
+func TestLoadAPI_MissingOrInvalidAuth_FailsWithoutEchoingSecrets(t *testing.T) {
+	_, err := LoadAPI(withEnv(map[string]string{
+		EnvDemoUsername:      "",
+		EnvDemoPassword:      "short1",
+		EnvSessionSigningKey: "leaky-short-key",
+		EnvSessionSecure:     "maybe",
+	}))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{EnvDemoUsername, "SESSION_COOKIE_SECURE", "at least 8 characters", "at least 32 bytes"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not mention %q", msg, want)
+		}
+	}
+	for _, secret := range []string{"short1", "leaky-short-key"} {
+		if strings.Contains(msg, secret) {
+			t.Errorf("error leaks a secret value: %q", msg)
+		}
+	}
+}
+
+func TestLoad_SharedConfigurationDoesNotRequireAuth(t *testing.T) {
+	if _, err := Load(env(map[string]string{EnvDatabaseURL: "postgres://u:p@localhost/db"})); err != nil {
+		t.Fatalf("migrate and seed must not need authentication settings: %v", err)
+	}
+}

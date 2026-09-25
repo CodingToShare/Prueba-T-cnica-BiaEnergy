@@ -2,7 +2,7 @@
 
 An MVP for electrical meter management that turns energy data into operational decisions: it detects anomalies, explains them with evidence, prioritizes what to investigate first, and recommends an action.
 
-> **Current status:** Phase 02 is complete. The Go runtime, the PostgreSQL schema, the verified, idempotent import of the challenge dataset, and health and readiness endpoints work. The deterministic anomaly engine (`src/backend/internal/analysis`) classifies, prioritizes and explains the four challenge scenarios with evidence, verified by automated tests; it is not exposed yet. **The product API, analysis runs and the frontend are not implemented yet** (Phases 03–05).
+> **Current status:** Phase 03 is complete. The Go backend serves the versioned, documented product API ([OpenAPI](docs/api/openapi.yaml)) with minimal demo login: analysis runs execute in the background over the PostgreSQL data, and their prioritized findings, evidence, meter states and dashboard are queryable. **The frontend and the generative explanation layer are not implemented yet** (Phases 04–05).
 
 ## Challenge Summary
 
@@ -81,8 +81,8 @@ AGENTS.md           engineering instruction router for contributors and agents
 | 00 | Repository, agent, and engineering governance foundation | Complete |
 | 01 | Runtime foundation, PostgreSQL, verified idempotent dataset ingestion | Complete |
 | 02 | Deterministic, evidence-producing anomaly engine | Complete (audited; non-blocking limitations documented) |
-| 03 | Versioned, documented API with persisted analysis runs | Planned |
-| 04 | Responsive product UI in the canonical visual language | Planned |
+| 03 | Versioned, documented API with persisted analysis runs | Complete |
+| 04 | Responsive product UI in the canonical visual language | Planned (not started) |
 | 05 | Grounded explanation and investigation experience | Planned |
 | 06 | Complete regression, observability, reproducible delivery, CI, demo | Planned |
 
@@ -106,14 +106,18 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
    docker compose up -d --wait
    ```
 
-2. Point the commands at the database (local-only credentials from `compose.yaml`):
+2. Point the commands at the database (local-only credentials from `compose.yaml`). The API also needs the demo login and a session signing key; the values below are local placeholders (see `.env.example`), never real secrets. `SESSION_COOKIE_SECURE=false` is only for plain-HTTP local development; it defaults to `true`.
 
    ```powershell
    $env:DATABASE_URL = "postgres://bia:bia_local_dev@localhost:5432/bia_energy?sslmode=disable"   # PowerShell
+   $env:DEMO_AUTH_USERNAME = "demo"; $env:DEMO_AUTH_PASSWORD = "change-me-locally"
+   $env:SESSION_SIGNING_KEY = "replace-with-a-local-development-key"; $env:SESSION_COOKIE_SECURE = "false"
    ```
 
    ```sh
    export DATABASE_URL="postgres://bia:bia_local_dev@localhost:5432/bia_energy?sslmode=disable"    # Bash/zsh
+   export DEMO_AUTH_USERNAME=demo DEMO_AUTH_PASSWORD=change-me-locally
+   export SESSION_SIGNING_KEY=replace-with-a-local-development-key SESSION_COOKIE_SECURE=false
    ```
 
 3. Create the schema, then import `data/input/readings.csv` and `events.csv`. Re-running either command is safe:
@@ -125,13 +129,40 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
 
    `migrate status` lists migrations and `migrate down` rolls back the latest one. The import validates both files before writing, loads them in one transaction and reports inserted, updated and unchanged rows.
 
-4. Start the API (default `HTTP_ADDR=:8080`; set `LOG_LEVEL=debug` for more output) and check it:
+4. Start the API (default `HTTP_ADDR=:8080`; set `LOG_LEVEL=debug` for more output). It also runs the background analysis worker:
 
    ```sh
    go -C src/backend run ./cmd/api
+   ```
+
+   In a second terminal, check it, log in, and run an analysis (Bash):
+
+   ```sh
    curl http://localhost:8080/healthz   # {"status":"ok"}: the process is alive
    curl http://localhost:8080/readyz    # {"status":"ready",...}: PostgreSQL reachable, otherwise 503
+
+   curl -c cookies.txt -H "Content-Type: application/json" -d '{"username":"demo","password":"change-me-locally"}' http://localhost:8080/api/v1/auth/login
+   curl -b cookies.txt -X POST http://localhost:8080/api/v1/ai/analyze          # 202 with analysis_id
+   curl -b cookies.txt http://localhost:8080/api/v1/ai/analysis/1               # replace 1 with the returned analysis_id; poll until terminal
+   curl -b cookies.txt http://localhost:8080/api/v1/anomalies                    # findings in priority order
+   curl -b cookies.txt http://localhost:8080/api/v1/dashboard/summary
    ```
+
+   PowerShell uses native JSON requests to avoid native-command quoting differences:
+
+   ```powershell
+   $base = 'http://localhost:8080'
+   Invoke-RestMethod "$base/healthz"
+   Invoke-RestMethod "$base/readyz"
+   Invoke-RestMethod -Method Post "$base/api/v1/auth/login" -ContentType 'application/json' -Body '{"username":"demo","password":"change-me-locally"}' -SessionVariable biaSession
+   $run = Invoke-RestMethod -Method Post "$base/api/v1/ai/analyze" -WebSession $biaSession
+   Invoke-RestMethod "$base/api/v1/ai/analysis/$($run.analysis_id)" -WebSession $biaSession # repeat until COMPLETED or FAILED
+   Invoke-RestMethod "$base/api/v1/anomalies" -WebSession $biaSession
+   Invoke-RestMethod "$base/api/v1/dashboard/summary" -WebSession $biaSession
+   Invoke-RestMethod -Method Post "$base/api/v1/auth/logout" -WebSession $biaSession
+   ```
+
+   Every route, parameter and response is documented in [docs/api/openapi.yaml](docs/api/openapi.yaml). `cookies.txt` holds a session cookie: delete it afterwards.
 
 5. Run the tests:
 
@@ -140,7 +171,14 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
    go -C src/backend test -tags=integration ./...   # plus integration, acceptance and black-box tests (Docker required)
    ```
 
-   The black-box test compiles the three commands and runs them as separate processes against a disposable PostgreSQL container.
+   The black-box tests compile the three commands and run them as separate processes against a disposable PostgreSQL container, including the authenticated analysis flow over real HTTP.
+
+   After changing `database/queries` or a migration, regenerate the typed query code with the pinned sqlc image (the output under `src/backend/internal/platform/postgres/dbgen` is generated; never edit it). From the repository root:
+
+   ```sh
+   docker run --rm -v "$(pwd):/src" -w /src sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537 generate     # Bash (Git Bash: prefix MSYS_NO_PATHCONV=1)
+   docker run --rm -v "${PWD}:/src" -w /src sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537 generate     # PowerShell
+   ```
 
 6. Stop PostgreSQL. `docker compose stop` keeps the data; `docker compose down -v` deletes this project's database volume:
 

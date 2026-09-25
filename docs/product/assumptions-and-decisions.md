@@ -27,6 +27,10 @@ This register keeps `TECHNICAL DECISION`, `ASSUMPTION`, and `OPEN DECISION` sepa
 | TD-19 | goose runs as a library through `cmd/migrate` (version pinned in `go.mod`); no globally installed migration tool. | ADR-002 |
 | TD-20 | Go integration tests live beside their package, behind the `integration` build tag, using testcontainers-go with the environment-validated `postgres:18.6-alpine` image; backend black-box tests live in `src/backend/functional`; `go test ./...` stays Docker-free. | Testing strategy |
 | TD-21 | Go module path is `bia-energy.local/backend`, a deliberately non-public placeholder because no canonical remote exists; rename when a repository URL is defined. | Phase 01 |
+| TD-22 | sqlc 1.31.1 runs from the official pinned image `sqlc/sqlc:1.31.1` (no cgo toolchain or global install needed); queries in `database/queries/`, generated code in `internal/platform/postgres/dbgen`, never edited by hand. | Phase 03, README |
+| TD-23 | Every analysis run stores the engine version (`analysis.EngineVersion`) and the JSON snapshot of the engine configuration it used, refreshed atomically at claim time if a queued request survived a deployment. | ADR-009, data model |
+| TD-24 | API JSON is snake_case; source wall-clock times are written without an offset, system instants as RFC 3339 UTC; `*_pct` fields are percent values and `confidence` is a fraction in [0, 1]; a missing analytical value is `null`. | `docs/api/openapi.yaml` |
+| TD-25 | Analysis runs are queued in PostgreSQL and claimed with `FOR UPDATE SKIP LOCKED`; at most one run is active; truthful coarse stages; startup marks interrupted `RUNNING` runs `FAILED` and keeps `QUEUED` runs. | ADR-009 (amends ADR-007) |
 
 ## Assumptions
 
@@ -51,15 +55,15 @@ Each is resolved in the named phase, recorded here with its rationale, and refle
 | OD-03 | Confidence formula and signal weighting. | Signals are fixed by ADR-004; weights are not. | Resolved in Phase 02 |
 | OD-04 | Severity computation. | Must depend on magnitude, persistence, corroboration, and classification — not on classification alone. | Resolved in Phase 02 |
 | OD-05 | Priority ranking function. | Must rank a high-severity real anomaly first (BR-06); ties between equal severities need a documented order. | Resolved in Phase 02 |
-| OD-06 | Windows for "current consumption" and "variation" in list, detail, and KPIs. | Challenge figures (e.g., M-109 2,180 kWh vs baseline ~1,070 kWh) are illustrative; the product computes and states its own window. | Engine part resolved in Phase 02; list/KPI windows Phase 03 |
-| OD-07 | Definition of the aggregated "AI confidence" KPI. | For example, mean confidence of escalated findings. | Phase 03 |
+| OD-06 | Windows for "current consumption" and "variation" in list, detail, and KPIs. | Challenge figures (e.g., M-109 2,180 kWh vs baseline ~1,070 kWh) are illustrative; the product computes and states its own window. | Resolved (engine part Phase 02; list and KPI part Phase 03) |
+| OD-07 | Definition of the aggregated "AI confidence" KPI. | For example, mean confidence of escalated findings. | Resolved in Phase 03 |
 | OD-08 | Event-type semantics: which event types can explain which deviation directions; treatment of `UNKNOWN` ("no operational event reported") and `DATA_QUALITY` events. | Events corroborate or explain; data-derived signals must still exist. An `UNKNOWN` event is not an explanation. | Resolved in Phase 02 |
 | OD-09 | Event influence window. | Durations exist only in free-text descriptions; options: parse cautiously, infer the window from data aligned to the event start, or a documented default. | Resolved in Phase 02 |
-| OD-10 | Mapping from findings to meter `computed_status` (OK / Alert / Critical). | Challenge example shows a high-severity data-quality meter as Alert, not Critical. | Engine mapping resolved in Phase 02; exposed in Phase 03 |
+| OD-10 | Mapping from findings to meter `computed_status` (OK / Alert / Critical). | Challenge example shows a high-severity data-quality meter as Alert, not Critical. | Resolved (Phase 02 mapping, exposed in Phase 03) |
 | OD-11 | Whether an `INVESTIGATE`/`UNKNOWN` classification is needed for ambiguous findings. | Not a requirement; add only if calibration shows real ambiguity. | Resolved in Phase 02 |
-| OD-12 | Login mechanism. | Must stay simple (e.g., single configured demo credential with a session cookie); no OAuth/RBAC. | Phase 03–04 |
+| OD-12 | Login mechanism. | Must stay simple (e.g., single configured demo credential with a session cookie); no OAuth/RBAC. | Backend resolved in Phase 03; login UI Phase 04 |
 | OD-13 | UI language (Spanish vs English). | Challenge is in Spanish; API enum values remain English constants. | Phase 04 |
-| OD-14 | Concurrent analysis runs and which run is "current". | For example, reject a new run while one is active; current = latest completed. | Phase 03 |
+| OD-14 | Concurrent analysis runs and which run is "current". | For example, reject a new run while one is active; current = latest completed. | Resolved in Phase 03 (ADR-009) |
 | OD-15 | Exact dependency versions. | Pinned at introduction (TD-13). | Phase 01+ |
 | OD-16 | Whether the demo enables Ollama and which local model. | The product must be complete without it. | Phase 05 |
 | OD-17 | Granularity of a finding: one per meter per run, or one per detected episode. | The challenge shows one row per meter. | Resolved in Phase 02 |
@@ -84,3 +88,13 @@ Calibrated on the supplied readings and events only. Details and evidence: `docs
 | OD-11 | No `INVESTIGATE`/`UNKNOWN` type. An unexplained load episode that is neither sustained nor electrically corroborated is internal "insufficient evidence" and not reported | Calibration showed no ambiguity needing a fifth type |
 | OD-17 | One finding per reportable episode (a meter may have several) | Episodes are the unit of evidence; the supplied data yields one per affected meter |
 | OD-18 | Every flagged reading, including data-quality ones, is excluded from baselines | Robustness; KPI treatment is Phase 03 |
+
+## Decisions Resolved In Phase 03 (2026-09-24)
+
+| ID | Resolution | Rationale |
+| --- | --- | --- |
+| OD-06 (list and KPI part) | Meter list and detail show total consumption over the whole dataset period. `variation_pct` is the consumption deviation (observed vs baseline energy) of the meter's top finding in the latest completed run, and `null` for a meter without a finding. The dashboard total is the period total | Uses only values the engine computed; never invents a 0% variation for meters without evidence |
+| OD-07 | Aggregate AI confidence = mean confidence of all findings of the latest completed run; `null` before any completed run or when the run has no findings. High priority = findings with severity `HIGH` | Transparent and reproducible from the listed findings; no fabricated 1.0 |
+| OD-10 (exposure) | The engine's per-meter computed status is persisted per run (`analysis_meter_results`) and exposed as `computed_status`; `null` before any completed run. `source_status` stays the CSV column | One mapping (the engine's), never re-derived in SQL or HTTP |
+| OD-12 (backend) | `POST /api/v1/auth/login` checks one configured demo credential (environment variables, constant-time comparison) and sets an HMAC-SHA256-signed cookie `bia_session` (HttpOnly, SameSite=Lax, Path=/, Secure unless `SESSION_COOKIE_SECURE=false`, 8 hours; verification permits at most 60 seconds of future issue-time clock skew and rejects expiration exactly at the boundary). `POST /api/v1/auth/logout` clears it idempotently; `GET /api/v1/auth/session` reports it. Every other `/api/v1` route answers 401 without it; health and readiness stay public. There is no user table, no server-side session store (so no revocation before expiry), no roles and no rate limiting. The login UI is Phase 04 | Proportionate demo mechanism (FR-AUTH-001); not a production identity system |
+| OD-14 | At most one active (QUEUED or RUNNING) run, enforced by a partial unique index; a new request while one is active returns that run (202, `created: false`). "Current" = the latest COMPLETED run; QUEUED, RUNNING and FAILED runs never replace it | Race-free without application locks; one simple polling flow for the UI |

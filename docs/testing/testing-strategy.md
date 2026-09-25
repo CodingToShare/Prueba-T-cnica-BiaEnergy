@@ -115,3 +115,10 @@ By Phase 06 the full suite and the documented startup (dependencies → migrate 
 ## Current State
 
 Phase 00 has no product tests (its validation is repository and documentation checks). Phase 01 established the first suites: unit tests (`go -C src/backend test ./...`) and integration, acceptance and functional tests against real PostgreSQL (`go -C src/backend test -tags=integration ./...`). Results are recorded in the Phase 01 document. Phase 02 added the analytics unit, synthetic-scenario and supplied-dataset acceptance tests in `internal/analysis`; they need no database and run in both commands. Results are recorded in the Phase 02 document.
+
+Phase 03 added three kinds of tests:
+- **Unit tests** (no Docker): demo authentication, source vs system time JSON, run-state helpers, evidence mapping, HTTP middleware, validation and error contract, and the OpenAPI checks (the document parses, references resolve, routes and schemas match the router and DTOs both ways).
+- **PostgreSQL integration tests**: run lifecycle, failure and rollback, the concurrency guarantees, recovery, current-state consistency, and every API endpoint.
+- **Black-box golden path**: login → analyze → poll → anomalies → meters → dashboard → logout, over compiled processes, real HTTP and cookies.
+
+Results are recorded in the Phase 03 document.

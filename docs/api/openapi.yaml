@@ -1,0 +1,673 @@
+openapi: 3.1.0
+info:
+  title: Bia Energy Management Platform API
+  version: 1.0.0
+  description: |
+    Versioned product API (`/api/v1`) of the Bia Energy Management Platform,
+    plus the public operational endpoints `/healthz` and `/readyz`.
+
+    **Authentication.** Every `/api/v1` route except `POST /auth/login` and
+    `POST /auth/logout` requires the `bia_session` cookie set by login
+    (HttpOnly, SameSite=Lax, Path=/, Secure unless disabled for local HTTP,
+    valid 8 hours). This is a constrained demo mechanism with one configured
+    credential, not an identity system. Unauthenticated requests get `401`
+    with the standard error body; the API never redirects.
+
+    **Time formats.** Two kinds of time are exposed and never mixed:
+    - `SourceTime` — readings, events and finding episodes. The source data
+      has no time zone, so these are wall-clock values **without an offset**,
+      e.g. `2026-09-12T14:00:00`. They must not be read as UTC.
+    - `SystemTime` — instants produced by the platform (analysis runs,
+      sessions): RFC 3339 in UTC, e.g. `2026-09-24T23:18:00Z`.
+
+    **Current state.** Meters, anomalies and the dashboard show the findings
+    of the latest COMPLETED analysis run. QUEUED, RUNNING and FAILED runs
+    never replace it.
+
+    **Conventions.** JSON fields are snake_case. `*_pct` values are percent
+    values (47.3 means 47.3 %); `confidence` is a fraction in [0, 1]. A
+    missing analytical value is `null`, never a fabricated zero. Errors
+    in the product API use the `Error` schema and carry the `X-Request-ID`
+    value. Readiness failure uses the explicitly documented `Health` schema.
+    Malformed query encoding, duplicate supported parameters and blank
+    enum/numeric/time values return 400; unknown query keys are ignored.
+servers:
+  - url: http://localhost:8080
+    description: Local development
+tags:
+  - name: operations
+  - name: auth
+  - name: meters
+  - name: anomalies
+  - name: analysis
+  - name: dashboard
+security:
+  - sessionCookie: []
+paths:
+  /healthz:
+    get:
+      tags: [operations]
+      operationId: getLiveness
+      summary: Process liveness
+      security: []
+      responses:
+        "200":
+          description: The process can serve HTTP.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ok }
+  /readyz:
+    get:
+      tags: [operations]
+      operationId: getReadiness
+      summary: Readiness (PostgreSQL reachable)
+      security: []
+      responses:
+        "200":
+          description: PostgreSQL is reachable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: ready, checks: { postgres: ok } }
+        "503":
+          description: PostgreSQL is not reachable.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+              example: { status: not_ready, checks: { postgres: unavailable } }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Start a demo session
+      description: |
+        Checks the configured demo credential and sets the `bia_session` cookie.
+        Requires Content-Type application/json (charset parameters are accepted)
+        and exactly one JSON object, with no unknown fields or trailing data.
+        The entire body, including whitespace, is limited to 4096 bytes.
+        Invalid media type, malformed or oversized bodies return 400 invalid_request.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Authenticated; the session cookie is set.
+          headers:
+            Set-Cookie:
+              description: "`bia_session=...; Path=/; HttpOnly; SameSite=Lax` (and `Secure` unless disabled)."
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: Invalid credentials (`invalid_credentials`). The message never says which field was wrong.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: End the session
+      description: Expires the session cookie. Idempotent; works with or without a valid session. There is no server-side revocation.
+      security: []
+      responses:
+        "204":
+          description: Session cookie cleared.
+  /api/v1/auth/session:
+    get:
+      tags: [auth]
+      operationId: getSession
+      summary: Current session
+      responses:
+        "200":
+          description: The request carries a valid session.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/meters:
+    get:
+      tags: [meters]
+      operationId: listMeters
+      summary: List meters with their current analytical state
+      parameters:
+        - name: search
+          in: query
+          description: Case-insensitive substring of the meter ID (at most 64 characters, matched literally).
+          schema: { type: string, maxLength: 64 }
+        - name: status
+          in: query
+          description: Computed status of the latest completed run.
+          schema: { $ref: "#/components/schemas/ComputedStatus" }
+        - name: sort
+          in: query
+          description: "`variation` sorts by magnitude; meters without a value sort last. `severity` sorts by severity, then priority."
+          schema: { type: string, enum: [meter_id, consumption, variation, severity], default: meter_id }
+        - name: order
+          in: query
+          description: Default is `asc` for `meter_id` and `desc` for the other sort keys.
+          schema: { type: string, enum: [asc, desc] }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: One page of meters.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeterList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/meters/{meterId}:
+    get:
+      tags: [meters]
+      operationId: getMeter
+      summary: Meter detail
+      parameters:
+        - $ref: "#/components/parameters/MeterId"
+      responses:
+        "200":
+          description: The meter.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeterDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/meters/{meterId}/readings:
+    get:
+      tags: [meters]
+      operationId: listMeterReadings
+      summary: Reading history of a meter
+      description: Readings in the half-open range [`from`, `to`), in time order.
+      parameters:
+        - $ref: "#/components/parameters/MeterId"
+        - name: from
+          in: query
+          description: Inclusive start (source time, no offset).
+          schema: { $ref: "#/components/schemas/SourceTime" }
+        - name: to
+          in: query
+          description: Exclusive end (source time, no offset). Must not be earlier than `from`.
+          schema: { $ref: "#/components/schemas/SourceTime" }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 }
+      responses:
+        "200":
+          description: Readings; `has_more` reports truncation by `limit`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadingList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/anomalies:
+    get:
+      tags: [anomalies]
+      operationId: listAnomalies
+      summary: Findings of the latest completed run, by priority
+      parameters:
+        - name: meter_id
+          in: query
+          schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/AnomalyType" }
+        - name: severity
+          in: query
+          schema: { $ref: "#/components/schemas/Severity" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Offset"
+      responses:
+        "200":
+          description: One page ordered by priority (1 first). Empty before any run completes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnomalyList" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/anomalies/{id}:
+    get:
+      tags: [anomalies]
+      operationId: getAnomaly
+      summary: A finding with its structured evidence
+      description: Returns what the analysis run stored; nothing is recomputed and no LLM is called.
+      parameters:
+        - $ref: "#/components/parameters/AnomalyId"
+      responses:
+        "200":
+          description: The finding.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnomalyDetail" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/ai/analyze:
+    post:
+      tags: [analysis]
+      operationId: requestAnalysis
+      summary: Queue an analysis run
+      description: |
+        Queues a run and returns immediately; a background worker executes it.
+        At most one run is active: while a QUEUED or RUNNING run exists, the
+        same run is returned with `created: false` (guaranteed by the database).
+      responses:
+        "202":
+          description: Run queued (or the active run returned).
+          headers:
+            Location:
+              description: "`/api/v1/ai/analysis/{id}`"
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalyzeResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/ai/analysis/{id}:
+    get:
+      tags: [analysis]
+      operationId: getAnalysis
+      summary: State of an analysis run (poll until COMPLETED or FAILED)
+      parameters:
+        - $ref: "#/components/parameters/AnalysisId"
+      responses:
+        "200":
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalysisRun" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/dashboard/summary:
+    get:
+      tags: [dashboard]
+      operationId: getDashboardSummary
+      summary: Fleet summary
+      description: |
+        Source figures always; analytical figures only from the latest
+        completed run. Before any run completes: `anomalies` and
+        `high_priority` are 0 and `aggregate_confidence` and
+        `latest_analysis` are null.
+      responses:
+        "200":
+          description: The summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: bia_session
+      description: Signed (HMAC-SHA256), not encrypted, demo session cookie issued by `POST /api/v1/auth/login`.
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+    Offset:
+      name: offset
+      in: query
+      schema: { type: integer, minimum: 0, maximum: 1000000, default: 0 }
+    MeterId:
+      name: meterId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" }
+      example: M-109
+    AnomalyId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    AnalysisId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+  responses:
+    BadRequest:
+      description: Invalid input (`invalid_query`, `invalid_meter_id`, `invalid_anomaly_id`, `invalid_analysis_id`, `invalid_timestamp`, `invalid_range`, `invalid_request`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: No valid session (`unauthorized`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example: { error: { code: unauthorized, message: Authentication is required., request_id: 3f2a9c0e5b7d41e8a6c4b2d0f1e3a5c7 } }
+    NotFound:
+      description: Unknown resource (`meter_not_found`, `anomaly_not_found`, `analysis_not_found`).
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      description: The only error shape. Other codes include `not_found`, `method_not_allowed`, `request_timeout` (503) and `internal_error` (500).
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { type: string, description: Stable machine-readable code. }
+            message: { type: string, description: Safe human-readable text; never internals. }
+            request_id: { type: string, description: Same value as the X-Request-ID response header. }
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+        checks: { type: object, additionalProperties: { type: string } }
+    SourceTime:
+      type: string
+      pattern: "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
+      description: Source wall-clock time without offset (the dataset has no time zone). Not UTC.
+      example: "2026-09-12T14:00:00"
+    SystemTime:
+      type: string
+      format: date-time
+      description: Platform instant, RFC 3339 in UTC.
+      example: "2026-09-24T23:18:00Z"
+    ComputedStatus:
+      type: string
+      enum: [OK, ALERT, CRITICAL]
+      description: Analytical meter status (never the source `status` column).
+    AnomalyType:
+      type: string
+      enum: [REAL_ANOMALY, DATA_QUALITY, EXPLAINABLE_ANOMALY, FALSE_POSITIVE]
+    Severity:
+      type: string
+      enum: [HIGH, MEDIUM, LOW]
+    RecommendedAction:
+      type: string
+      enum: [INVESTIGATE_METER_AND_INSTALLATION, VALIDATE_MEASUREMENT_OR_SENSOR, VALIDATE_OPERATIONAL_CHANGE, NO_ESCALATION_MONITOR]
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string }
+        password: { type: string, format: password }
+    Session:
+      type: object
+      required: [authenticated, username, expires_at]
+      properties:
+        authenticated: { type: boolean }
+        username: { type: string }
+        expires_at: { $ref: "#/components/schemas/SystemTime" }
+    Pagination:
+      type: object
+      required: [limit, offset, total]
+      properties:
+        limit: { type: integer }
+        offset: { type: integer }
+        total: { type: integer, description: Matching items across all pages. }
+    AnalysisRef:
+      type: object
+      description: The latest completed run that produced the current state.
+      required: [id, status, completed_at]
+      properties:
+        id: { type: integer, format: int64 }
+        status: { type: string, enum: [COMPLETED] }
+        completed_at: { $ref: "#/components/schemas/SystemTime" }
+    Period:
+      type: object
+      required: [first_reading_at, last_reading_at]
+      properties:
+        first_reading_at: { $ref: "#/components/schemas/SourceTime" }
+        last_reading_at: { $ref: "#/components/schemas/SourceTime" }
+    MeterSummary:
+      type: object
+      required: [meter_id, total_consumption_kwh, variation_pct, computed_status, anomaly_id, anomaly_type, severity, confidence, priority]
+      properties:
+        meter_id: { type: string }
+        total_consumption_kwh: { type: number, description: Sum over all readings of the meter. }
+        variation_pct: { type: [number, "null"], description: Consumption deviation of the meter's top finding over its episode (observed vs baseline energy); null without a finding. }
+        computed_status: { oneOf: [{ $ref: "#/components/schemas/ComputedStatus" }, { type: "null" }], description: Null before any run completes. }
+        anomaly_id: { type: [integer, "null"], format: int64 }
+        anomaly_type: { oneOf: [{ $ref: "#/components/schemas/AnomalyType" }, { type: "null" }] }
+        severity: { oneOf: [{ $ref: "#/components/schemas/Severity" }, { type: "null" }] }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        priority: { type: [integer, "null"] }
+    MeterList:
+      type: object
+      required: [items, pagination, analysis]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MeterSummary" } }
+        pagination: { $ref: "#/components/schemas/Pagination" }
+        analysis: { oneOf: [{ $ref: "#/components/schemas/AnalysisRef" }, { type: "null" }] }
+    MeterFinding:
+      type: object
+      required: [anomaly_id, type, severity, confidence, priority, variation_pct, started_at, last_observed_at, recommended_action, reason]
+      properties:
+        anomaly_id: { type: integer, format: int64 }
+        type: { $ref: "#/components/schemas/AnomalyType" }
+        severity: { $ref: "#/components/schemas/Severity" }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        priority: { type: integer }
+        variation_pct: { type: number }
+        started_at: { $ref: "#/components/schemas/SourceTime" }
+        last_observed_at: { $ref: "#/components/schemas/SourceTime" }
+        recommended_action: { $ref: "#/components/schemas/RecommendedAction" }
+        reason: { type: string }
+    MeterDetail:
+      type: object
+      required: [meter_id, total_consumption_kwh, readings_count, period, computed_status, findings_count, current_finding, analysis]
+      properties:
+        meter_id: { type: string }
+        total_consumption_kwh: { type: number }
+        readings_count: { type: integer }
+        period: { oneOf: [{ $ref: "#/components/schemas/Period" }, { type: "null" }] }
+        computed_status: { oneOf: [{ $ref: "#/components/schemas/ComputedStatus" }, { type: "null" }] }
+        findings_count: { type: integer, description: Findings of this meter in the current run. }
+        current_finding: { oneOf: [{ $ref: "#/components/schemas/MeterFinding" }, { type: "null" }], description: Highest-priority finding of the meter. }
+        analysis: { oneOf: [{ $ref: "#/components/schemas/AnalysisRef" }, { type: "null" }] }
+    Reading:
+      type: object
+      required: [timestamp, consumption_kwh, voltage_v, current_a, power_factor, source_status]
+      properties:
+        timestamp: { $ref: "#/components/schemas/SourceTime" }
+        consumption_kwh: { type: number }
+        voltage_v: { type: number }
+        current_a: { type: number }
+        power_factor: { type: number }
+        source_status: { type: string, description: The CSV status column as supplied; not meter health. }
+    ReadingList:
+      type: object
+      required: [meter_id, from, to, limit, has_more, items]
+      properties:
+        meter_id: { type: string }
+        from: { oneOf: [{ $ref: "#/components/schemas/SourceTime" }, { type: "null" }] }
+        to: { oneOf: [{ $ref: "#/components/schemas/SourceTime" }, { type: "null" }] }
+        limit: { type: integer }
+        has_more: { type: boolean }
+        items: { type: array, items: { $ref: "#/components/schemas/Reading" } }
+    AnomalySummary:
+      type: object
+      required: [id, analysis_id, meter_id, priority, type, severity, confidence, status, started_at, last_observed_at, duration_hours, variation_pct, reason, recommended_action]
+      properties:
+        id: { type: integer, format: int64 }
+        analysis_id: { type: integer, format: int64 }
+        meter_id: { type: string }
+        priority: { type: integer, description: 1 is investigated first. }
+        type: { $ref: "#/components/schemas/AnomalyType" }
+        severity: { $ref: "#/components/schemas/Severity" }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        status: { type: string, enum: [OPEN] }
+        started_at: { $ref: "#/components/schemas/SourceTime" }
+        last_observed_at: { $ref: "#/components/schemas/SourceTime" }
+        duration_hours: { type: number }
+        variation_pct: { type: number, description: Observed vs baseline energy over the episode, in percent. }
+        reason: { type: string, description: Deterministic one-sentence summary built only from the evidence. }
+        recommended_action: { $ref: "#/components/schemas/RecommendedAction" }
+    AnomalyList:
+      type: object
+      required: [items, pagination, analysis]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AnomalySummary" } }
+        pagination: { $ref: "#/components/schemas/Pagination" }
+        analysis: { oneOf: [{ $ref: "#/components/schemas/AnalysisRef" }, { type: "null" }] }
+    AnomalyDetail:
+      allOf:
+        - $ref: "#/components/schemas/AnomalySummary"
+        - type: object
+          required: [rule, created_at, evidence]
+          properties:
+            rule: { type: string, description: Decision path that produced the type. }
+            created_at: { $ref: "#/components/schemas/SystemTime" }
+            evidence: { $ref: "#/components/schemas/Evidence" }
+    Evidence:
+      type: object
+      description: Structured evidence persisted by the analysis run (schema_version 1). Correlated events are in `related_events`.
+      required: [schema_version, rule, evidence_strength, consumption, persistence, metrics, related_events, confidence_breakdown, signals]
+      properties:
+        schema_version: { type: integer, const: 1 }
+        rule: { type: string }
+        evidence_strength: { type: number, description: Median primary deviation as a multiple of its threshold. }
+        consumption:
+          type: object
+          required: [baseline_kwh, observed_kwh, deviation_pct, median_deviation_pct, direction]
+          properties:
+            baseline_kwh: { type: number }
+            observed_kwh: { type: number }
+            deviation_pct: { type: number }
+            median_deviation_pct: { type: number }
+            direction: { type: string, enum: [UP, DOWN] }
+        persistence:
+          type: object
+          required: [duration_hours, flagged_readings, span_readings, density_fraction, longest_run, sustained, recovery]
+          properties:
+            duration_hours: { type: number }
+            flagged_readings: { type: integer }
+            span_readings: { type: integer }
+            density_fraction: { type: number }
+            longest_run: { type: integer }
+            sustained: { type: boolean }
+            recovery:
+              type: object
+              required: [recovered, recovered_at, readings_observed, median_consumption_deviation_pct]
+              properties:
+                recovered: { type: boolean }
+                recovered_at: { oneOf: [{ $ref: "#/components/schemas/SourceTime" }, { type: "null" }] }
+                readings_observed: { type: integer }
+                median_consumption_deviation_pct: { type: number }
+        metrics:
+          type: array
+          items:
+            type: object
+            required: [metric, evaluated_readings, triggered_readings, median_observed, median_baseline, median_deviation_pct, max_abs_deviation_pct, direction, corroborates]
+            properties:
+              metric: { type: string, enum: [consumption_kwh, voltage_v, current_a, power_factor, consumption_to_load_proxy_ratio] }
+              evaluated_readings: { type: integer }
+              triggered_readings: { type: integer }
+              median_observed: { type: number }
+              median_baseline: { type: number }
+              median_deviation_pct: { type: number }
+              max_abs_deviation_pct: { type: number }
+              direction: { type: [string, "null"], enum: [UP, DOWN, MIXED, null] }
+              corroborates: { type: boolean }
+        related_events:
+          type: array
+          items:
+            type: object
+            required: [timestamp, type, description, offset_seconds, role]
+            properties:
+              timestamp: { $ref: "#/components/schemas/SourceTime" }
+              type: { type: string }
+              description: { type: string }
+              offset_seconds: { type: integer, description: Event time minus the episode onset. }
+              role: { type: string, enum: [EXPLAINS, CORROBORATES, CONTEXT] }
+        confidence_breakdown:
+          type: object
+          required: [signal_strength, persistence, multivariate_support, event_context, pattern_support]
+          properties:
+            signal_strength: { type: number }
+            persistence: { type: number }
+            multivariate_support: { type: number }
+            event_context: { type: number }
+            pattern_support: { type: number }
+        signals:
+          type: array
+          items:
+            type: object
+            required: [metric, timestamp, observed, baseline, deviation, deviation_pct, robust_z, direction, strength]
+            properties:
+              metric: { type: string }
+              timestamp: { $ref: "#/components/schemas/SourceTime" }
+              observed: { type: number }
+              baseline: { type: number }
+              deviation: { type: number }
+              deviation_pct: { type: number }
+              robust_z: { type: number }
+              direction: { type: string, enum: [UP, DOWN] }
+              strength: { type: number }
+    AnalysisRun:
+      type: object
+      required: [analysis_id, status, stage, progress, engine_version, created_at, started_at, completed_at, meters_count, readings_count, events_count, findings_count, high_priority_count, aggregate_confidence, error]
+      properties:
+        analysis_id: { type: integer, format: int64 }
+        status: { type: string, enum: [QUEUED, RUNNING, COMPLETED, FAILED] }
+        stage:
+          type: string
+          enum: [QUEUED, LOADING_DATA, ANALYZING, PERSISTING_RESULTS, COMPLETED, FAILED]
+          description: Real lifecycle step; progress is 0, 10, 35, 85, 100 at QUEUED, LOADING_DATA, ANALYZING, PERSISTING_RESULTS, COMPLETED. A FAILED run keeps the progress of the stage that failed.
+        progress: { type: integer, minimum: 0, maximum: 100 }
+        engine_version: { type: string }
+        created_at: { $ref: "#/components/schemas/SystemTime" }
+        started_at: { oneOf: [{ $ref: "#/components/schemas/SystemTime" }, { type: "null" }] }
+        completed_at: { oneOf: [{ $ref: "#/components/schemas/SystemTime" }, { type: "null" }] }
+        meters_count: { type: [integer, "null"] }
+        readings_count: { type: [integer, "null"] }
+        events_count: { type: [integer, "null"] }
+        findings_count: { type: [integer, "null"] }
+        high_priority_count: { type: [integer, "null"], description: Findings with severity HIGH. }
+        aggregate_confidence: { type: [number, "null"], description: Mean confidence of the run's findings; null without findings. }
+        error:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [code, message]
+              properties:
+                code: { type: string, enum: [load_failed, analysis_failed, persistence_failed, timeout, interrupted] }
+                message: { type: string }
+    AnalyzeResponse:
+      allOf:
+        - $ref: "#/components/schemas/AnalysisRun"
+        - type: object
+          required: [created]
+          properties:
+            created: { type: boolean, description: False when the already active run was returned. }
+    DashboardSummary:
+      type: object
+      required: [meters, readings, total_consumption_kwh, period, anomalies, high_priority, aggregate_confidence, latest_analysis, active_analysis]
+      properties:
+        meters: { type: integer }
+        readings: { type: integer }
+        total_consumption_kwh: { type: number, description: Sum over all readings of the period. }
+        period: { oneOf: [{ $ref: "#/components/schemas/Period" }, { type: "null" }] }
+        anomalies: { type: integer, description: Findings of the latest completed run (all types). }
+        high_priority: { type: integer, description: Of those, findings with severity HIGH. }
+        aggregate_confidence: { type: [number, "null"], description: Mean confidence of those findings; null before any completed run or without findings. }
+        latest_analysis: { oneOf: [{ $ref: "#/components/schemas/AnalysisRef" }, { type: "null" }] }
+        active_analysis:
+          oneOf:
+            - type: "null"
+            - type: object
+              required: [id, status, stage, progress]
+              properties:
+                id: { type: integer, format: int64 }
+                status: { type: string, enum: [QUEUED, RUNNING] }
+                stage: { type: string }
+                progress: { type: integer }

@@ -1,0 +1,28 @@
+# sqlc configuration (Phase 03). Generate from the repository root with the
+# pinned image (see README):
+#   docker run --rm -v "<repository root>:/src" -w /src sqlc/sqlc:1.31.1 generate
+# Output is generated code: never edit it by hand.
+version: "2"
+sql:
+  - engine: postgresql
+    schema: database/migrations
+    queries: database/queries
+    gen:
+      go:
+        package: dbgen
+        out: src/backend/internal/platform/postgres/dbgen
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        overrides:
+          # Source wall-clock times (ADR-008) and system instants are both
+          # time.Time in Go; the API formats them differently.
+          - db_type: pg_catalog.timestamp
+            go_type: time.Time
+          - db_type: pg_catalog.timestamp
+            nullable: true
+            go_type: {import: time, type: Time, pointer: true}
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type: {import: time, type: Time, pointer: true}

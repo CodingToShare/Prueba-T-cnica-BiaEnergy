@@ -11,7 +11,7 @@ Any change under `src/backend` except the pure analytics engine internals (see `
 
 ## Responsibilities
 
-Serve the versioned API, orchestrate analysis runs (ADR-007), and compose platform concerns, with packages by capability (ADR-002).
+Serve the versioned API, orchestrate analysis runs (ADR-007, ADR-009), keep `docs/api/openapi.yaml` in sync with the router, and compose platform concerns, with packages by capability (ADR-002).
 
 ## Required Rules
 

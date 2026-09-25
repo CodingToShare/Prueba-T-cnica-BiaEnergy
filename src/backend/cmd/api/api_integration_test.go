@@ -15,9 +15,33 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"bia-energy.local/backend/internal/auth"
 	"bia-energy.local/backend/internal/config"
 	"bia-energy.local/backend/internal/platform/postgres/pgtest"
 )
+
+// apiConfig uses test-only credentials.
+func apiConfig(databaseURL string) config.APIConfig {
+	return config.APIConfig{
+		Config: config.Config{HTTPAddr: "127.0.0.1:0", DatabaseURL: databaseURL},
+		Auth: auth.Config{
+			Username:   "test-operator",
+			Password:   "test-password-123",
+			SigningKey: []byte("test-signing-key-0123456789abcdef-test"),
+		},
+	}
+}
+
+func TestAPI_InvalidAuthConfiguration_FailsBeforeConnecting(t *testing.T) {
+	cfg := apiConfig("postgres://nobody:nothing@127.0.0.1:1/none?sslmode=disable")
+	cfg.Auth.SigningKey = []byte("short")
+
+	err := run(context.Background(), cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "authentication configuration")
+	assert.NotContains(t, err.Error(), "connect to PostgreSQL")
+}
 
 func getJSON(t *testing.T, url string) (int, map[string]any) {
 	t.Helper()
@@ -31,7 +55,7 @@ func getJSON(t *testing.T, url string) (int, map[string]any) {
 
 func TestAPI_HealthReadinessAndGracefulShutdown(t *testing.T) {
 	db := pgtest.StartMigrated(t)
-	cfg := config.Config{HTTPAddr: "127.0.0.1:0", DatabaseURL: db.URL}
+	cfg := apiConfig(db.URL)
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -61,7 +85,7 @@ func TestAPI_HealthReadinessAndGracefulShutdown(t *testing.T) {
 	resp, err := http.Get(base + "/api/v1/meters")
 	require.NoError(t, err)
 	resp.Body.Close()
-	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "no product API exists in Phase 01")
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "the product API requires a session")
 
 	// PostgreSQL goes away: the process stays alive but is no longer ready.
 	require.NoError(t, db.Container.Stop(context.Background(), nil))
@@ -81,7 +105,7 @@ func TestAPI_HealthReadinessAndGracefulShutdown(t *testing.T) {
 }
 
 func TestAPI_DatabaseUnreachableAtStartup_FailsFast(t *testing.T) {
-	cfg := config.Config{HTTPAddr: "127.0.0.1:0", DatabaseURL: "postgres://nobody:nothing@127.0.0.1:1/none?sslmode=disable"}
+	cfg := apiConfig("postgres://nobody:nothing@127.0.0.1:1/none?sslmode=disable")
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	err := run(context.Background(), cfg, logger, nil)

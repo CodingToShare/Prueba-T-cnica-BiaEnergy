@@ -10,75 +10,82 @@ import (
 // Config holds every threshold and weight of the engine. Defaults and their
 // calibration rationale are documented in docs/ai/anomaly-analysis.md.
 // A Config is copied into the Engine; there is no package-level mutable state.
+// Its JSON form (durations in nanoseconds) is the configuration snapshot
+// persisted with every analysis run.
 type Config struct {
 	// HistoryObservations is both the size and the minimum of a baseline: the
 	// most recent same-meter, same-hour-of-day readings that were not flagged.
-	HistoryObservations int
+	HistoryObservations int `json:"history_observations"`
 	// MinSpreadFraction floors the MAD at this fraction of |median| so a
 	// near-constant history cannot divide by zero.
-	MinSpreadFraction float64
+	MinSpreadFraction float64 `json:"min_spread_fraction"`
 	// MinRobustZ is the statistical gate every signal must pass.
-	MinRobustZ float64
+	MinRobustZ float64 `json:"min_robust_z"`
 	// MinDeviation is the relative-deviation gate every signal must pass.
-	MinDeviation DeviationThresholds
+	MinDeviation DeviationThresholds `json:"min_deviation"`
 
 	// ReadingInterval is the duration one reading covers.
-	ReadingInterval time.Duration
+	ReadingInterval time.Duration `json:"reading_interval_ns"`
 	// MinInconsistentMetrics is how many electrical metrics must deviate,
 	// while consumption does not, for a reading to be inconsistent.
-	MinInconsistentMetrics int
+	MinInconsistentMetrics int `json:"min_inconsistent_metrics"`
 
 	// MaxGap is the longest time between two flagged readings of one episode.
-	MaxGap time.Duration
+	MaxGap time.Duration `json:"max_gap_ns"`
 	// MinEpisodeReadings is the fewest flagged readings a reportable episode has.
-	MinEpisodeReadings int
+	MinEpisodeReadings int `json:"min_episode_readings"`
 	// RecoveryReadings is how many consecutive readings without the episode's
 	// signal prove a recovery.
-	RecoveryReadings int
+	RecoveryReadings int `json:"recovery_readings"`
 	// SustainedDuration is the duration from which an episode is sustained.
-	SustainedDuration time.Duration
+	SustainedDuration time.Duration `json:"sustained_duration_ns"`
 	// CorroborationShare is the share of flagged readings in which an
 	// electrical metric must deviate to corroborate a finding.
-	CorroborationShare float64
+	CorroborationShare float64 `json:"corroboration_share"`
 
 	// EventWindow is the maximum distance between an event and an episode's
 	// onset for the event to be correlated.
-	EventWindow time.Duration
+	EventWindow time.Duration `json:"event_window_ns"`
 
 	// HighDeviation is the consumption deviation from which an unexplained
 	// anomaly can be HIGH severity.
-	HighDeviation float64
+	HighDeviation float64 `json:"high_deviation"`
 
 	// SignalSaturation is the evidence strength (multiple of the threshold)
 	// at which the signal-strength component reaches 1.
-	SignalSaturation float64
+	SignalSaturation float64 `json:"signal_saturation"`
 	// FullPersistenceReadings is the flagged-reading count at which the
 	// persistence component reaches 1.
-	FullPersistenceReadings int
+	FullPersistenceReadings int `json:"full_persistence_readings"`
 	// FullMultivariateMetrics is the corroborating-metric count at which the
 	// multivariate component reaches 1.
-	FullMultivariateMetrics int
+	FullMultivariateMetrics int `json:"full_multivariate_metrics"`
 	// Weights combine the confidence components; they sum to 1.
-	Weights ConfidenceWeights
+	Weights ConfidenceWeights `json:"confidence_weights"`
 }
 
 // DeviationThresholds are minimum |relative deviations| from the baseline.
 type DeviationThresholds struct {
-	Consumption float64
-	Voltage     float64
-	Current     float64
-	PowerFactor float64
-	LoadRatio   float64
+	Consumption float64 `json:"consumption"`
+	Voltage     float64 `json:"voltage"`
+	Current     float64 `json:"current"`
+	PowerFactor float64 `json:"power_factor"`
+	LoadRatio   float64 `json:"load_ratio"`
 }
 
 // ConfidenceWeights weight the ConfidenceBreakdown components.
 type ConfidenceWeights struct {
-	SignalStrength      float64
-	Persistence         float64
-	MultivariateSupport float64
-	EventContext        float64
-	PatternSupport      float64
+	SignalStrength      float64 `json:"signal_strength"`
+	Persistence         float64 `json:"persistence"`
+	MultivariateSupport float64 `json:"multivariate_support"`
+	EventContext        float64 `json:"event_context"`
+	PatternSupport      float64 `json:"pattern_support"`
 }
+
+// EngineVersion identifies the analysis algorithm. Change it whenever the
+// algorithm or the meaning of a configuration value changes, so persisted
+// runs record which policy produced them.
+const EngineVersion = "1.0.0"
 
 // DefaultConfig returns the calibrated defaults.
 func DefaultConfig() Config {

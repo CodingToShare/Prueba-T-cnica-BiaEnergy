@@ -28,6 +28,10 @@ func New(cfg Config) (*Engine, error) {
 	return &Engine{cfg: cfg}, nil
 }
 
+// Config returns a copy of the engine configuration, e.g. to persist it
+// with an analysis run.
+func (e *Engine) Config() Config { return e.cfg }
+
 // Analyze classifies the readings of every meter, correlating the events.
 // The inputs are neither modified nor retained, and their order does not
 // matter. It fails on duplicate or non-finite readings, malformed events, an

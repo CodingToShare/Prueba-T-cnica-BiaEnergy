@@ -11,6 +11,8 @@ desktop.ini
 .env
 .env.*
 !.env.example
+# Local HTTP session cookies (README curl walkthrough)
+cookies.txt
 *.pem
 *.key
 secrets/

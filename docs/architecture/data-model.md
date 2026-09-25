@@ -1,6 +1,6 @@
-# Data Model And Ingestion (Phase 01)
+# Data Model
 
-Source data persisted by Phase 01. The schema source of truth is `database/migrations/00001_create_source_data.sql`; this page explains it. Analysis tables (`analysis_runs`, `anomalies`) arrive in Phase 03.
+Source data persisted by Phase 01 and analysis results persisted by Phase 03. The schema sources of truth are `database/migrations/00001_create_source_data.sql` and `00002_create_analysis_results.sql`; this page explains them.
 
 ```mermaid
 erDiagram
@@ -60,4 +60,47 @@ erDiagram
 4. Load everything in one transaction using a pipelined pgx batch: meters, then readings, then events. Any failure rolls back everything.
 5. The load is idempotent through the natural keys: `ON CONFLICT DO NOTHING` for meters and events; for readings, `ON CONFLICT DO UPDATE` only when a value actually changed. The result reports inserted, updated and unchanged rows per table. Re-running the same files changes nothing; there is no delete-and-reload.
 
-Data access: the ingestion statements are hand-written, parameterized pgx statements in `internal/ingestion/store.go`. sqlc is introduced in Phase 03 for product read queries (TD-18).
+Data access: the ingestion statements are hand-written, parameterized pgx statements in `internal/ingestion/store.go` (TD-18).
+
+## Analysis Results (Phase 03)
+
+```mermaid
+erDiagram
+  analysis_runs ||--o{ anomalies : "analysis_run_id"
+  analysis_runs ||--o{ analysis_meter_results : "analysis_run_id"
+  meters ||--o{ anomalies : "meter_id"
+  meters ||--o{ analysis_meter_results : "meter_id"
+```
+
+| Table | Key | Integrity enforced by PostgreSQL | Notes |
+| --- | --- | --- | --- |
+| `analysis_runs` | `id` identity | Enumerations: status QUEUED/RUNNING/COMPLETED/FAILED; stage QUEUED/LOADING_DATA/ANALYZING/PERSISTING_RESULTS/COMPLETED/FAILED. Ranges: progress 0–100, counts ≥ 0, aggregate confidence in [0, 1]. Consistency: FAILED ⇔ error code and message; COMPLETED/FAILED ⇔ `completed_at`; COMPLETED ⇒ result counts and progress 100 | One row per analysis, never deleted. Stores the engine version, the engine configuration snapshot (JSONB), source counts, findings and high-priority counts, and the mean confidence (NULL without findings). Lifecycle: ADR-009 |
+| `anomalies` | `id` identity; `UNIQUE (analysis_run_id, priority)` | FKs to the run and `meters`; type, severity and status enumerations; confidence in [0, 1]; non-blank rule/action/reason; `last_observed_at >= started_at`; positive duration; evidence is a JSON object | One row per reportable finding. Filtered and sorted fields are columns; the structured evidence is JSONB (`schema_version` 1). `status` is always `OPEN`: there is no acknowledgement workflow |
+| `analysis_meter_results` | `(analysis_run_id, meter_id)` | FKs; computed status in OK/ALERT/CRITICAL; counts ≥ 0 | The computed status of each meter as returned by the engine for each run (TD-07, OD-10), so SQL never re-derives it |
+
+Constraints use `CHECK` rather than PostgreSQL enums, so adding a value is a one-line migration.
+
+**Time semantics.**
+- Finding episodes (`started_at`, `last_observed_at`) are source wall-clock times: `timestamp without time zone`, like readings (ADR-008).
+- Run and row instants (`created_at`, `started_at`, `completed_at`) are real system instants: `timestamptz`.
+- The API writes the first kind without an offset and the second as RFC 3339 UTC.
+
+**Numbers.**
+- `confidence` and `consumption_deviation_pct` are `double precision`, so the engine's `float64` values round-trip exactly.
+- The evidence JSONB holds the same values in their shortest decimal form, which also round-trips exactly. This is proven for every finding of the supplied data.
+
+**Indexes.** Each non-key index serves a named query shape:
+
+| Index | Serves |
+| --- | --- |
+| `analysis_runs_single_active`: partial unique on `((true)) WHERE status IN ('QUEUED','RUNNING')` | The one-active-run guarantee (ADR-009) and the active-run lookup |
+| `analysis_runs_latest_completed`: `(completed_at DESC, id DESC) WHERE status = 'COMPLETED'` | "Latest completed run", part of every current-state read |
+| `anomalies_priority_per_run`: the unique constraint on `(analysis_run_id, priority)` | The findings of one run in priority order |
+
+With a handful of runs, PostgreSQL scans these tiny tables directly (`EXPLAIN` in the Phase 03 record); the indexes matter as history grows. The reading-history query uses `readings_pkey` (meter + time range).
+
+**Data access.**
+- Product queries are SQL files in `database/queries/`, compiled by sqlc 1.31.1 into `src/backend/internal/platform/postgres/dbgen`. That code is generated; never edit it by hand. The pinned command is in the README.
+- Measurements are read as `::float8`, which rounds NUMERIC to the nearest double exactly as the CSV parser does. The engine therefore gets identical inputs from the database.
+- Multi-query reads run in one read-only REPEATABLE READ transaction (`postgres.ReadSnapshot`), so a page, its total and the current run are consistent.
+- Analysis input uses the same snapshot helper for readings and events; the transaction ends before the engine runs. Execution provenance is refreshed atomically when a queued run is claimed (ADR-009).

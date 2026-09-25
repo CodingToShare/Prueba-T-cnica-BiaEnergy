@@ -7,7 +7,7 @@ Sequential, phase-gated delivery for a three-day challenge. Procedures are in th
 | 00 | Repository + AI Agent + Engineering Governance Foundation | Complete (after corrective validation) | Clean, coherent, agent-ready workspace with canonical visual and test governance |
 | 01 | Runtime Foundation + PostgreSQL + Dataset Ingestion | Complete | Go runtime, PostgreSQL schema, migrations, and verified idempotent dataset ingestion |
 | 02 | Analytics / Anomaly Engine | Complete (independent audit; non-blocking notes) | Deterministic, evidence-producing engine passing the four acceptance scenarios |
-| 03 | Backend API + Analysis Orchestration | Planned / Not Started | Versioned, documented API with persisted analysis runs and progress |
+| 03 | Backend API + Analysis Orchestration | Complete (independent audit; non-blocking notes) | Versioned, documented API with persisted analysis runs and progress |
 | 04 | Frontend Product Experience | Planned / Not Started | Responsive SaaS-quality product UI matching the canonical visual language |
 | 05 | AI Investigation / Explainability Integration | Planned / Not Started | Grounded deterministic + optional generative explanation and investigation experience |
 | 06 | Quality + Observability + Delivery + Demo | Planned / Not Started | Complete regression, observability, reproducible delivery, CI, and polished demo |
@@ -44,7 +44,7 @@ Run everything that exists and applies at that point. Concrete commands are reco
 | Phase 01 | Repository and governance validation (structure, legacy scan, document consistency, design reference present and consistent with the design contract) |
 | Phase 02 | Backend build and static checks; Phase 01 unit tests; PostgreSQL integration tests; ingestion and data-integrity checks. Commands: `go -C src/backend build ./...`, `go -C src/backend vet -tags=integration ./...`, `go -C src/backend test -tags=integration ./...` (Docker required) |
 | Phase 03 | All of the above; analytics unit tests; analytics acceptance scenarios; existing integration tests. Commands: the Phase 02 list plus `go -C src/backend test ./internal/analysis/` (included in both suites; no Docker) |
-| Phase 04 | Backend build and tests; API integration tests; OpenAPI/contract checks; frontend bootstrap/build checks once available |
+| Phase 04 | Backend build and tests; API integration tests; OpenAPI/contract checks; frontend bootstrap/build checks once available. Commands: `go -C src/backend build ./...`, `go -C src/backend vet -tags=integration ./...`, `go -C src/backend test ./...` (includes the OpenAPI checks), `go -C src/backend test -tags=integration ./...` (API, orchestration and black-box golden path; Docker required), and sqlc drift `docker run --rm -v "<repo>:/src" -w /src sqlc/sqlc:1.31.1 diff` |
 | Phase 05 | Complete backend regression; frontend unit/component regression; Playwright critical smoke flow |
 | Phase 06 | Complete existing automated suite; Docker/runtime baseline; known acceptance flow |
 
