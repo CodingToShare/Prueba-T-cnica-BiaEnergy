@@ -46,22 +46,41 @@ Each is resolved in the named phase, recorded here with its rationale, and refle
 
 | ID | Open decision | Notes | Resolve in |
 | --- | --- | --- | --- |
-| OD-01 | Detection thresholds (robust Z-score, percentage deviation, persistence length). | Calibrate against the supplied data; store in one configuration location. | Phase 02 |
-| OD-02 | Baseline reference window and contamination handling. | 14 days allows hour-of-day profiles but very few samples per weekday-hour; the baseline must not be distorted by the anomaly itself. | Phase 02 |
-| OD-03 | Confidence formula and signal weighting. | Signals are fixed by ADR-004; weights are not. | Phase 02 |
-| OD-04 | Severity computation. | Must depend on magnitude, persistence, corroboration, and classification — not on classification alone. | Phase 02 |
-| OD-05 | Priority ranking function. | Must rank a high-severity real anomaly first (BR-06); ties between equal severities need a documented order. | Phase 02 |
-| OD-06 | Windows for "current consumption" and "variation" in list, detail, and KPIs. | Challenge figures (e.g., M-109 2,180 kWh vs baseline ~1,070 kWh) are illustrative; the product computes and states its own window. | Phase 02–03 |
+| OD-01 | Detection thresholds (robust Z-score, percentage deviation, persistence length). | Calibrate against the supplied data; store in one configuration location. | Resolved in Phase 02 |
+| OD-02 | Baseline reference window and contamination handling. | 14 days allows hour-of-day profiles but very few samples per weekday-hour; the baseline must not be distorted by the anomaly itself. | Resolved in Phase 02 |
+| OD-03 | Confidence formula and signal weighting. | Signals are fixed by ADR-004; weights are not. | Resolved in Phase 02 |
+| OD-04 | Severity computation. | Must depend on magnitude, persistence, corroboration, and classification — not on classification alone. | Resolved in Phase 02 |
+| OD-05 | Priority ranking function. | Must rank a high-severity real anomaly first (BR-06); ties between equal severities need a documented order. | Resolved in Phase 02 |
+| OD-06 | Windows for "current consumption" and "variation" in list, detail, and KPIs. | Challenge figures (e.g., M-109 2,180 kWh vs baseline ~1,070 kWh) are illustrative; the product computes and states its own window. | Engine part resolved in Phase 02; list/KPI windows Phase 03 |
 | OD-07 | Definition of the aggregated "AI confidence" KPI. | For example, mean confidence of escalated findings. | Phase 03 |
-| OD-08 | Event-type semantics: which event types can explain which deviation directions; treatment of `UNKNOWN` ("no operational event reported") and `DATA_QUALITY` events. | Events corroborate or explain; data-derived signals must still exist. An `UNKNOWN` event is not an explanation. | Phase 02 |
-| OD-09 | Event influence window. | Durations exist only in free-text descriptions; options: parse cautiously, infer the window from data aligned to the event start, or a documented default. | Phase 02 |
-| OD-10 | Mapping from findings to meter `computed_status` (OK / Alert / Critical). | Challenge example shows a high-severity data-quality meter as Alert, not Critical. | Phase 02–03 |
-| OD-11 | Whether an `INVESTIGATE`/`UNKNOWN` classification is needed for ambiguous findings. | Not a requirement; add only if calibration shows real ambiguity. | Phase 02 |
+| OD-08 | Event-type semantics: which event types can explain which deviation directions; treatment of `UNKNOWN` ("no operational event reported") and `DATA_QUALITY` events. | Events corroborate or explain; data-derived signals must still exist. An `UNKNOWN` event is not an explanation. | Resolved in Phase 02 |
+| OD-09 | Event influence window. | Durations exist only in free-text descriptions; options: parse cautiously, infer the window from data aligned to the event start, or a documented default. | Resolved in Phase 02 |
+| OD-10 | Mapping from findings to meter `computed_status` (OK / Alert / Critical). | Challenge example shows a high-severity data-quality meter as Alert, not Critical. | Engine mapping resolved in Phase 02; exposed in Phase 03 |
+| OD-11 | Whether an `INVESTIGATE`/`UNKNOWN` classification is needed for ambiguous findings. | Not a requirement; add only if calibration shows real ambiguity. | Resolved in Phase 02 |
 | OD-12 | Login mechanism. | Must stay simple (e.g., single configured demo credential with a session cookie); no OAuth/RBAC. | Phase 03–04 |
 | OD-13 | UI language (Spanish vs English). | Challenge is in Spanish; API enum values remain English constants. | Phase 04 |
 | OD-14 | Concurrent analysis runs and which run is "current". | For example, reject a new run while one is active; current = latest completed. | Phase 03 |
 | OD-15 | Exact dependency versions. | Pinned at introduction (TD-13). | Phase 01+ |
 | OD-16 | Whether the demo enables Ollama and which local model. | The product must be complete without it. | Phase 05 |
-| OD-17 | Granularity of a finding: one per meter per run, or one per detected episode. | The challenge shows one row per meter. | Phase 02 |
-| OD-18 | Whether readings flagged as data-quality problems are excluded from baselines and consumption KPIs. | Affects baseline robustness and KPI honesty. | Phase 02 |
+| OD-17 | Granularity of a finding: one per meter per run, or one per detected episode. | The challenge shows one row per meter. | Resolved in Phase 02 |
+| OD-18 | Whether readings flagged as data-quality problems are excluded from baselines and consumption KPIs. | Affects baseline robustness and KPI honesty. | Resolved in Phase 02 |
 | OD-19 | Entry point for reproducible dev/seed/test/demo-reset (e.g., Make targets vs cross-platform scripts vs Compose-only). | Must work on the evaluator's OS; `make` is not available by default on Windows. Phase 01 uses plain cross-platform `docker compose` and `go run` commands (README). The final single entry point is decided in Phase 06. | Phase 06 |
+
+## Decisions Resolved In Phase 02 (2026-09-24)
+
+Calibrated on the supplied readings and events only. Details and evidence: `docs/ai/anomaly-analysis.md`; configuration: `analysis.DefaultConfig()`.
+
+| ID | Resolution | Rationale |
+| --- | --- | --- |
+| OD-01 | Dual gate: \|relative deviation\| ≥ 25% consumption, 3% voltage, 20% current, 8% power factor, 40% consumption-to-load ratio, **and** \|robust Z\| ≥ 3.5. Episodes: gap ≤ 3 h, ≥ 3 flagged readings; sustained ≥ 12 h; recovery = 6 consecutive evaluated hourly readings with no gap | Each relative threshold is a rounded value above the largest deviation on the 8 event-free meters; Z alone flags normal hours because spreads are tiny. Individual and coherent relative-threshold ±20% checks preserve the outcome; gap reduction to 2.4 h does not. Exact sensitivity scope: `docs/ai/anomaly-analysis.md` §5 |
+| OD-02 | Baseline per meter and hour of day from the 7 most recent **non-flagged** same-hour readings (7 required; the eighth day is the first evaluated) | Equals "previous 7 days" in normal operation; skipping flagged readings freezes the baseline during an episode and keeps finished episodes out of it; no future data is ever used |
+| OD-03 | Confidence = 0.25 signal strength + 0.20 persistence + 0.20 multivariate support + 0.20 event context + 0.15 pattern support; components exposed. The derived ratio adds no independent multivariate vote; ancillary load support requires current to follow consumption | Transparent, bounded, monotone within a fixed classification/event/recovery context; the components are heuristic ADR-004 signal families, not calibrated probabilities |
+| OD-04 | Severity from type and evidence (real: HIGH only when sustained, ≥ 50% and corroborated; data quality: HIGH when sustained; explainable: at most MEDIUM; false positive: LOW) | Severity is operational importance, not certainty; an explained change is never escalated |
+| OD-05 | Comparator: severity → type risk (real, data quality, explainable, false positive) → confidence → evidence strength → onset → meter ID | Transparent order instead of an opaque score; a HIGH real anomaly ranks first (BR-06) |
+| OD-06 (engine part) | A finding reports observed vs baseline energy summed over its flagged readings and the median hourly deviation | Windows for lists and KPIs are Phase 03 |
+| OD-08 | `OPERATIONAL_CHANGE` explains a rise or drop; `SCHEDULED_OUTAGE` explains only a drop; `DATA_QUALITY` only corroborates inconsistency findings; `UNKNOWN` and unrecognized types are context only | Structured types plus observed behavior; descriptions are never parsed |
+| OD-09 | Events within ±3 h of the episode onset are correlated; how long an outage lasts is taken from the **observed recovery**, not from the free text | Durations exist only in text; observation is generalizable |
+| OD-10 (engine part) | CRITICAL for a HIGH real anomaly; ALERT for any other real anomaly or any MEDIUM/HIGH finding; otherwise OK | Matches the challenge example (HIGH data quality shown as Alert) |
+| OD-11 | No `INVESTIGATE`/`UNKNOWN` type. An unexplained load episode that is neither sustained nor electrically corroborated is internal "insufficient evidence" and not reported | Calibration showed no ambiguity needing a fifth type |
+| OD-17 | One finding per reportable episode (a meter may have several) | Episodes are the unit of evidence; the supplied data yields one per affected meter |
+| OD-18 | Every flagged reading, including data-quality ones, is excluded from baselines | Robustness; KPI treatment is Phase 03 |

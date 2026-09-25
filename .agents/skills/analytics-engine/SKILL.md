@@ -17,7 +17,7 @@ Produce deterministic, generalized, evidence-backed findings (ADR-004) that sati
 
 - Pure package: inputs are readings/events and configuration; no DB, HTTP, clock, network, or randomness.
 - Meter-specific, hour-of-day-aware robust baselines (median, scaled MAD with a spread floor); robust Z and percentage deviation; persistence distinguishes spikes from sustained shifts.
-- Data quality is evaluated before consumption anomalies; physical consistency is calibrated per meter.
+- Readings are interpreted before episodes: a consumption deviation is a load change, and normal consumption with several deviating electrical metrics is an inconsistent (data-quality) measurement. Physical consistency is calibrated per meter and never checked against a constant.
 - Events explain only when temporally aligned and semantically compatible; a "no event reported" record is not an explanation; data-quality events only corroborate.
 - Confidence is computed from signals and its components stored as evidence; severity and priority are computed, not looked up by type.
 - All thresholds/weights in one configuration struct; each documented with rationale when calibrated.

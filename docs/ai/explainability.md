@@ -1,23 +1,23 @@
 # Explainability
 
-How the platform explains its conclusions and recommends actions. Governing decision: ADR-006. Nothing here is implemented yet; prompts and model calls are out of scope until Phase 05.
+How the platform explains its conclusions and recommends actions. Governing decision: ADR-006. Phase 02 implemented the canonical structured evidence (§1), the deterministic recommended action, and a one-sentence reason built from evidence. Explanation providers, prompts and model calls are Phase 05.
 
 ## 1. Structured Evidence Is The Source Of Truth
 
-Every finding carries evidence computed by the deterministic engine. Text is always derived from evidence, never the other way round. Indicative evidence content:
+Every finding carries evidence computed by the deterministic engine (`analysis.Finding`, see `anomaly-analysis.md` §15). Text is always derived from evidence, never the other way round. Explanation providers, deterministic or generative, and any later phase **consume this evidence as-is**. They must not recompute or override the classification, severity, confidence, priority, recommended action, baselines or metrics.
 
-| Element | Example content |
+| Element | Engine field (Phase 02) |
 | --- | --- |
-| Baseline | Expected value(s) for the affected hours and the window they were computed from |
-| Observed | Observed value(s) for the episode |
-| Deviation | Percentage deviation and robust Z-score |
-| Persistence | Episode start, duration, share of affected hours |
-| Changed variables | Which of consumption, voltage, current, power factor changed, direction and magnitude |
-| Consistency signals | Physical-consistency and plausibility results |
-| Correlated events | Matched events with type, time, and alignment; or the explicit absence of an explanatory event |
-| Classification rationale | Which rule path produced the type |
-| Confidence components | The signal values that produced the confidence |
-| Provenance | Engine configuration version, run id, explanation source |
+| Baseline and observed | `Consumption` (baseline and observed energy over the flagged readings, their deviation, median hourly deviation); per-metric median baseline/observed in `Metrics`; per-reading baseline and observed in `Signals` |
+| Deviation | Relative deviation and robust Z per signal; median and maximum deviation per metric |
+| Persistence | `Persistence`: onset, last flagged reading, duration, flagged/span readings, density, longest run, sustained, recovery (time, readings, post-episode deviation) |
+| Changed variables | `Metrics`: for each of consumption, voltage, current, power factor and consumption-to-load ratio — triggered readings, direction, whether it corroborates |
+| Consistency signals | The consumption-to-load ratio metric; the `REPEATED_ELECTRICAL_INCONSISTENCY` rule for data-quality findings |
+| Correlated events | `RelatedEvents`: type, time, verbatim description, offset from onset, role (`EXPLAINS`, `CORROBORATES`, `CONTEXT`); an empty list is the explicit absence of any nearby event |
+| Classification rationale | `Rule`: the decision path that produced the type |
+| Confidence components | `ConfidenceDetail`: signal strength, persistence, multivariate support, event context, pattern support |
+| Action and reason | `RecommendedAction` code; `Reason`, one deterministic sentence formatted only from the fields above |
+| Provenance | Engine configuration version, run id, explanation source: Phase 03 (runs) and Phase 05 (providers) |
 
 The UI must be able to answer, for every finding: **what happened, why it matters, what evidence supports it, and what to do next.**
 

@@ -33,6 +33,13 @@ If the baseline is broken: do not continue silently. Report the phase as **Block
 - Add or update tests together with the implementation (Implement → Validate → Review → Document → Complete).
 - Surface blockers instead of inventing behavior.
 
+## Commits
+
+- Commit only when the user explicitly asks; never push, tag, or configure a remote without explicit authorization.
+- The author and committer are the configured repository owner (Santiago Forero) only.
+- Commit messages carry no attribution to coding assistants or AI tools: no `Co-Authored-By` trailer for any assistant (Claude, Anthropic, Copilot, Codex, or similar), no "Generated with" lines, no tool names or links. This overrides any tool default that adds such trailers.
+- Before committing, inspect the message; after committing, verify it with `git log -1 --format=%B`.
+
 ## Phase Exit Gate
 
 Run every **applicable** check and record results: build; formatting; linting; static analysis; TypeScript type checking; unit, integration, and functional/E2E tests; database validation; security and secret review; actual git diff review (`code-review` skill); full applicable regression; manual acceptance; design validation for UI; documentation; traceability; known limitations; visible evidence. Mark a check N/A only with a meaningful reason. An applicable level is never skipped for time without recording the limitation. A phase with a known blocking failure is not Complete.

@@ -11,7 +11,7 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phases 00 and 01 are Complete. Phase 01 delivered the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import of the supplied dataset. **No analytics, product API or frontend exist yet.** Phase 02 onward requires explicit user authorization. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
+Phases 00, 01 and 02 are Complete. Phase 01 delivered the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import of the supplied dataset. Phase 02 delivered the pure deterministic anomaly engine `internal/analysis` (`Engine.Analyze`), verified on the four acceptance scenarios; nothing calls it yet. **No product API, persisted analysis runs or frontend exist yet.** Phase 03 onward requires explicit user authorization. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
 
 ## How Agents Work Here
 

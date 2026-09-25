@@ -114,4 +114,4 @@ By Phase 06 the full suite and the documented startup (dependencies → migrate 
 
 ## Current State
 
-Phase 00 has no product tests (its validation is repository and documentation checks). Phase 01 established the first suites: unit tests (`go -C src/backend test ./...`) and integration, acceptance and functional tests against real PostgreSQL (`go -C src/backend test -tags=integration ./...`). Results are recorded in the Phase 01 document.
+Phase 00 has no product tests (its validation is repository and documentation checks). Phase 01 established the first suites: unit tests (`go -C src/backend test ./...`) and integration, acceptance and functional tests against real PostgreSQL (`go -C src/backend test -tags=integration ./...`). Results are recorded in the Phase 01 document. Phase 02 added the analytics unit, synthetic-scenario and supplied-dataset acceptance tests in `internal/analysis`; they need no database and run in both commands. Results are recorded in the Phase 02 document.

@@ -1,6 +1,6 @@
 # Architecture
 
-Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. **Nothing described here is implemented yet**; this is the target the phases build toward.
+Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), and the pure analysis engine (Phase 02); run orchestration, the product API and the frontend are not implemented yet.
 
 ## 1. System Context
 

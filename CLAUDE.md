@@ -13,4 +13,5 @@ Non-negotiable reminders (details in `AGENTS.md`):
 - Never hard-code meter IDs or dataset answers; never create or read `expected_results.csv`.
 - The LLM is an optional explanation layer, never the anomaly detector.
 - Do not promote assumptions to requirements or introduce stack, architecture, or dependencies that conflict with the accepted ADRs.
+- Commits: author Santiago Forero only; never add a `Co-Authored-By` trailer or any Claude/Anthropic attribution to commit messages or PR descriptions, whatever the tool default says.
 - Before finishing: apply the Definition of Done, build affected projects, run relevant tests, review the actual diff, and update phase evidence for authorized phase work.

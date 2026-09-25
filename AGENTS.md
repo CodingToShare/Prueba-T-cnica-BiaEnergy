@@ -131,7 +131,7 @@ Gates (defined in `docs/phases/roadmap.md`): phase authorization, entry, scope, 
 
 ## 13. Delivery
 
-Docker Compose (`compose.yaml`, PostgreSQL since Phase 01) is the local runtime; GitHub Actions is the intended CI (Phase 06). By Phase 06 an evaluator must be able to start dependencies, migrate, import the provided data, and start backend and frontend without manually repairing state (FR-DEL-002; entry point OD-19). Never document a command before it exists and works. Pin dependency versions when they are first introduced, not before. Prefer Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`).
+Docker Compose (`compose.yaml`, PostgreSQL since Phase 01) is the local runtime; GitHub Actions is the intended CI (Phase 06). By Phase 06 an evaluator must be able to start dependencies, migrate, import the provided data, and start backend and frontend without manually repairing state (FR-DEL-002; entry point OD-19). Never document a command before it exists and works. Pin dependency versions when they are first introduced, not before. Prefer Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`). Commits are authored by the repository owner only and never carry `Co-Authored-By` or other attribution to coding assistants (details: `phase-governance` skill, "Commits").
 
 ## 14. Agent Configuration Files
 

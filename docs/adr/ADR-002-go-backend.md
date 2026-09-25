@@ -28,7 +28,7 @@ src/backend/
     reading/      reading queries and time ranges
     event/        operational events
     anomaly/      anomaly persistence and queries
-    analysis/     analysis engine (pure) and run orchestration
+    analysis/     analysis engine (pure, Phase 02) and run orchestration (Phase 03)
     dashboard/    summary aggregation
     platform/     postgres (pool, migrations), health (Phase 01); HTTP helpers, metrics later
 ```

@@ -2,7 +2,7 @@
 
 An MVP for electrical meter management that turns energy data into operational decisions: it detects anomalies, explains them with evidence, prioritizes what to investigate first, and recommends an action.
 
-> **Current status:** Phase 01 is complete. The Go runtime, the PostgreSQL schema and the verified, idempotent import of the challenge dataset work, together with health and readiness endpoints. **Analytics, the product API and the frontend are not implemented yet** (Phases 02–05).
+> **Current status:** Phase 02 is complete. The Go runtime, the PostgreSQL schema, the verified, idempotent import of the challenge dataset, and health and readiness endpoints work. The deterministic anomaly engine (`src/backend/internal/analysis`) classifies, prioritizes and explains the four challenge scenarios with evidence, verified by automated tests; it is not exposed yet. **The product API, analysis runs and the frontend are not implemented yet** (Phases 03–05).
 
 ## Challenge Summary
 
@@ -80,7 +80,7 @@ AGENTS.md           engineering instruction router for contributors and agents
 | --- | --- | --- |
 | 00 | Repository, agent, and engineering governance foundation | Complete |
 | 01 | Runtime foundation, PostgreSQL, verified idempotent dataset ingestion | Complete |
-| 02 | Deterministic, evidence-producing anomaly engine | Planned |
+| 02 | Deterministic, evidence-producing anomaly engine | Complete (audited; non-blocking limitations documented) |
 | 03 | Versioned, documented API with persisted analysis runs | Planned |
 | 04 | Responsive product UI in the canonical visual language | Planned |
 | 05 | Grounded explanation and investigation experience | Planned |
@@ -136,7 +136,7 @@ Prerequisites: Go 1.27.x and Docker with Compose v2 (see [environment readiness]
 5. Run the tests:
 
    ```sh
-   go -C src/backend test ./...                     # unit tests, no Docker needed
+   go -C src/backend test ./...                     # unit tests and the analytics acceptance suite, no Docker needed
    go -C src/backend test -tags=integration ./...   # plus integration, acceptance and black-box tests (Docker required)
    ```
 
