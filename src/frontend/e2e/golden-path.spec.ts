@@ -91,6 +91,11 @@ test("golden path: login → dashboard → AI analysis → investigation → met
   await expect(page.getByRole("heading", { name: "What happened" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Investigate meter and installation" })).toBeVisible();
   await expect(page.getByText("Context only — does not explain it")).toBeVisible();
+  // The explanation stored by the run (deterministic provider by default).
+  const explanation = page.getByRole("region", { name: "Explanation" });
+  await expect(explanation.getByText("Evidence-based explanation")).toBeVisible();
+  await expect(explanation).toContainText("no recorded event explains the change");
+  await expect(explanation).toContainText("Classification, severity and confidence come from the deterministic analysis.");
   await expect(page.getByRole("img", { name: /^Consumption of M-109\./ })).toBeVisible();
   await page.getByText("Technical evidence").click();
   await expect(page.getByText("Decision rule")).toBeVisible();

@@ -12,8 +12,11 @@ describe("analysis state", () => {
   });
 
   it("marks steps from the actual stage only", () => {
-    expect(runSteps({ status: "RUNNING", stage: "ANALYZING" }).map((s) => s.state)).toEqual(["done", "done", "current", "pending", "pending"]);
-    expect(runSteps({ status: "QUEUED", stage: "QUEUED" }).map((s) => s.state)).toEqual(["current", "pending", "pending", "pending", "pending"]);
+    expect(runSteps({ status: "RUNNING", stage: "ANALYZING" }).map((s) => s.state)).toEqual(["done", "done", "current", "pending", "pending", "pending"]);
+    expect(runSteps({ status: "QUEUED", stage: "QUEUED" }).map((s) => s.state)).toEqual(["current", "pending", "pending", "pending", "pending", "pending"]);
+    const explaining = runSteps({ status: "RUNNING", stage: "GENERATING_EXPLANATIONS" });
+    expect(explaining.map((s) => s.state)).toEqual(["done", "done", "done", "current", "pending", "pending"]);
+    expect(explaining[3].label).toBe("Writing explanations");
     expect(runSteps({ status: "COMPLETED", stage: "COMPLETED" }).every((s) => s.state === "done")).toBe(true);
   });
 

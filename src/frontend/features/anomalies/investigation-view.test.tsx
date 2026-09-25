@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AnomalyDetail } from "@/lib/api/types";
 import { apiError, installApiFake } from "@/test/api-fake";
-import { anomalyDetail } from "@/test/fixtures";
+import { anomalyDetail, explanation } from "@/test/fixtures";
 import { renderWithClient } from "@/test/render";
 
 import { InvestigationView } from "./investigation-view";
@@ -127,5 +127,105 @@ describe("InvestigationView", () => {
     renderWithClient(<InvestigationView id={999} />);
     expect(await screen.findByText("Anomaly not found")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "All anomalies" })).toHaveAttribute("href", "/anomalies");
+  });
+});
+
+describe("InvestigationView — explanation", () => {
+  function explanationPanel() {
+    return screen.getByRole("heading", { level: 2, name: "Explanation" }).closest("section") as HTMLElement;
+  }
+
+  it("presents a locally generated explanation with its model and the transparency note", async () => {
+    show(anomalyDetail({ explanation: explanation({ source: "OLLAMA", model: "llama3.2:3b", prompt_version: "energy-explanation-v1", summary: "Generated summary." }) }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    const panel = explanationPanel();
+    expect(within(panel).getByText("Generated locally with llama3.2:3b")).toBeInTheDocument();
+    expect(within(panel).getByText("Generated summary.")).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { level: 3, name: "Why it matters" })).toBeInTheDocument();
+    expect(within(panel).getByRole("heading", { level: 3, name: "Evidence" })).toBeInTheDocument();
+    expect(panel).toHaveTextContent("Classification, severity and confidence come from the deterministic analysis. The language model only helps explain the evidence.");
+    // The explanation is page content, not a live announcement.
+    expect(panel.querySelector("[aria-live]")).toBeNull();
+    // It supplements the deterministic summary: "Why it matters" appears once, in the explanation.
+    expect(screen.getAllByRole("heading", { name: "Why it matters" })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "What happened" })).toBeInTheDocument();
+  });
+
+  it("keeps provenance details collapsed and shows model, prompt version and fallback status", async () => {
+    show(anomalyDetail({ explanation: explanation({ source: "OLLAMA", model: "llama3.2:3b", prompt_version: "energy-explanation-v1" }) }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    const details = within(explanationPanel()).getByText("About this explanation").closest("details") as HTMLElement;
+    expect(details).not.toHaveAttribute("open");
+    expect(details).toHaveTextContent("SourceOLLAMA");
+    expect(details).toHaveTextContent("Modelllama3.2:3b");
+    expect(details).toHaveTextContent("Prompt versionenergy-explanation-v1");
+    expect(details).toHaveTextContent("Fallback usedNo");
+  });
+
+  it("labels deterministic text as evidence-based, without a model", async () => {
+    show(anomalyDetail({ explanation: explanation() }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    const panel = explanationPanel();
+    expect(within(panel).getByText("Evidence-based explanation")).toBeInTheDocument();
+    expect(panel).toHaveTextContent("This text is built from that evidence.");
+    expect(panel).not.toHaveTextContent("language model");
+    expect(panel).toHaveTextContent("Model—");
+  });
+
+  it("shows a fallback subtly, as a label, with no error banner", async () => {
+    show(anomalyDetail({ explanation: explanation({ fallback_used: true }) }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    const panel = explanationPanel();
+    expect(within(panel).getByText("Evidence-based fallback")).toBeInTheDocument();
+    expect(within(panel).queryByRole("alert")).toBeNull();
+    expect(panel).toHaveTextContent("Fallback usedYes");
+  });
+
+  it("words the action card with the stored text while the action itself stays the deterministic code", async () => {
+    show(anomalyDetail({ explanation: explanation({ recommended_action_text: "Check the installation on site today." }) }));
+
+    const action = (await screen.findByRole("heading", { name: "Investigate meter and installation" })).closest("section") as HTMLElement;
+    expect(action).toHaveTextContent("Check the installation on site today.");
+  });
+
+  it("renders generated HTML-like content as text", async () => {
+    show(anomalyDetail({ explanation: explanation({ source: "OLLAMA", model: "m", summary: "<script>alert(1)</script>", why_it_matters: "<b>bold</b>" }) }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    expect(within(explanationPanel()).getByText("<script>alert(1)</script>")).toBeInTheDocument();
+    expect(within(explanationPanel()).getByText("<b>bold</b>")).toBeInTheDocument();
+    expect(document.querySelector("main script, section script, b")).toBeNull();
+  });
+
+  it("handles a missing model and an unknown future source without inventing provenance", async () => {
+    show(anomalyDetail({ explanation: explanation({ source: "OLLAMA", model: null }) }));
+    expect(await screen.findByText("Generated locally with a local model")).toBeInTheDocument();
+  });
+
+  it("shows an unknown source as reported", async () => {
+    show(anomalyDetail({ explanation: explanation({ source: "FUTURE_PROVIDER" as unknown as "OLLAMA" }) }));
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    expect(within(explanationPanel()).getByText("Explanation source: FUTURE_PROVIDER")).toBeInTheDocument();
+    expect(explanationPanel()).not.toHaveTextContent("language model");
+  });
+
+  it("keeps the page usable with maximum-length text", async () => {
+    const long = "word ".repeat(140).trim();
+    show(anomalyDetail({ explanation: explanation({ summary: long.slice(0, 320), why_it_matters: long, evidence_narrative: long, recommended_action_text: long }) }));
+
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    expect(screen.getByRole("heading", { name: "Investigate meter and installation" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View meter TST-7" })).toBeInTheDocument();
+  });
+
+  it("tells when a finding has no stored explanation", async () => {
+    show(anomalyDetail({ explanation: null }));
+    await screen.findByRole("heading", { level: 2, name: "Explanation" });
+    expect(explanationPanel()).toHaveTextContent("No explanation was stored for this finding.");
+    expect(screen.getByRole("heading", { name: "Why it matters" })).toBeInTheDocument();
   });
 });

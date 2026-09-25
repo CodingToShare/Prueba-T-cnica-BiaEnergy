@@ -26,7 +26,7 @@ func TestRun_AuditQueuedRestartUsesActualEngineProvenance(t *testing.T) {
 	cfg.MinRobustZ += 0.25
 	current, err := analysis.New(cfg)
 	require.NoError(t, err)
-	restarted, err := NewService(db.Pool, current, "audit-new-engine", current.Config(), quiet, Options{})
+	restarted, err := NewService(db.Pool, current, stubExplainers, "audit-new-engine", current.Config(), quiet, Options{})
 	require.NoError(t, err)
 	_, err = restarted.ProcessNext(ctx)
 	require.NoError(t, err)

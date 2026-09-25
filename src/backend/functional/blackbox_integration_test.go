@@ -46,6 +46,8 @@ func apiEnv(databaseURL string) []string {
 		"DEMO_AUTH_PASSWORD":    demoPassword,
 		"SESSION_SIGNING_KEY":   demoSigningKey,
 		"SESSION_COOKIE_SECURE": "false",
+		// Explicit default, so a developer's own Ollama settings never apply.
+		"EXPLANATION_PROVIDER": "deterministic",
 	})
 }
 

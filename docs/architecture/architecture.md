@@ -1,6 +1,6 @@
 # Architecture
 
-Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), the pure analysis engine (Phase 02), and the product API with demo login, persisted analysis runs and background orchestration (Phase 03). The frontend and explanation providers are not implemented yet.
+Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), the pure analysis engine (Phase 02), the product API with demo login, persisted analysis runs and background orchestration (Phase 03), the Next.js product UI (Phase 04), and the explanation providers with persisted, grounded explanations (Phase 05). Metrics, CI and delivery automation are Phase 06.
 
 ## 1. System Context
 
@@ -29,9 +29,9 @@ The dataset is small, the team is one, the deadline is three days, and no compon
 | HTTP layer (`internal/httpapi`) | Routing, request IDs, request logging, session check, input validation, status codes, the error body, DTOs and time formatting | Contain business or analytics rules; run SQL directly |
 | Read services (`internal/meter`, `internal/anomaly`, `internal/dashboard`) | Current-state queries via sqlc (readings belong to `meter`; events are read by the orchestration and kept in evidence) | Duplicate engine logic or recompute findings |
 | Analysis engine (`internal/analysis`, pure) | Baselines, detection, correlation, classification, severity, confidence, evidence, priority | Access database, HTTP, clock, or network |
-| Run orchestration (`internal/analysisrun`) | Queue and claim runs, load inputs from PostgreSQL, invoke the engine through the `Analyzer` boundary, persist progress and results atomically; later call the `ExplanationProvider` (Phase 05) | Make classification decisions |
+| Run orchestration (`internal/analysisrun`) | Queue and claim runs, load inputs from PostgreSQL, invoke the engine through the `Analyzer` boundary, obtain one explanation per finding through the `ExplanationProvider` boundary (with deterministic fallback), persist progress and results atomically | Make classification decisions; fail a run because an explanation provider failed |
 | Demo authentication (`internal/auth`) | One configured credential; signed session cookie (OD-12) | Store users, roles or sessions |
-| Explanation providers | Turn structured evidence into text | Change any computed value |
+| Explanation providers (`internal/explanation`) | Turn one finding and its evidence into operator text: deterministic templates (default and fallback) or a local Ollama model; prompt, output parsing and grounding validation | Change any computed value; be called when a finding is read |
 | Platform (`internal/platform`) | Database pool, migrations, generated queries, health, source/system JSON time; metrics in Phase 06. Configuration is `internal/config`; request error mapping is `internal/httpapi` | Hold product logic |
 | PostgreSQL | Integrity, filtering, sorting, aggregation | — |
 
@@ -67,12 +67,17 @@ flowchart TD
   SV --> CF[Confidence]
   CF --> EV[Evidence]
   EV --> RC[Recommendation]
-  RC --> X{Explanation provider}
-  X -->|default| DET[Deterministic text]
-  X -. optional .-> GEN[Generative text, grounded]
+  RC --> X{ExplanationProvider}
+  X -->|default| DET[Deterministic explanation]
+  X -. optional .-> GEN[Ollama explanation<br/>validated, grounded]
+  GEN -. failure / invalid / timeout .-> DET
+  DET --> PX[(Persisted explanation<br/>+ provenance)]
+  GEN --> PX
+  PX --> API2[GET /api/v1/anomalies/id]
+  API2 --> UI[Investigation UI]
 ```
 
-Everything up to and including Recommendation is deterministic and authoritative (ADR-004). The explanation step only produces wording (ADR-006).
+Everything up to and including Recommendation is deterministic and authoritative (ADR-004). The explanation step only produces wording (ADR-006): providers receive one finding and its evidence and return four text fields, so nothing they return can change a type, severity, confidence, priority, evidence value or action code. **A provider failure never invalidates the analytics**: the deterministic text replaces the generated text, the fallback is recorded, and the run completes. An analytical, loading or persistence failure still fails the run. Explanations are generated once per run and persisted; reading a finding never calls a provider. Details: [`docs/ai/explainability.md`](../ai/explainability.md).
 
 ## 6. Analysis Run Flow
 
@@ -89,13 +94,14 @@ sequenceDiagram
   BG->>DB: claim oldest QUEUED run (FOR UPDATE SKIP LOCKED) → RUNNING / LOADING_DATA
   BG->>DB: read readings + events (one read-only snapshot; close before computation)
   BG->>BG: engine (ANALYZING)
-  BG->>DB: meter statuses + findings + COMPLETED (one transaction, PERSISTING_RESULTS)
+  BG->>BG: one explanation per finding, sequentially (GENERATING_EXPLANATIONS; optional local Ollama, deterministic fallback)
+  BG->>DB: meter statuses + findings + explanations + COMPLETED (one transaction, PERSISTING_RESULTS)
   UI->>API: GET /api/v1/ai/analysis/{id} (poll)
   API-->>UI: status, stage, progress
   UI->>API: GET /api/v1/anomalies (latest COMPLETED run)
 ```
 
-Status `QUEUED → RUNNING → COMPLETED | FAILED`. Stage `QUEUED → LOADING_DATA → ANALYZING → PERSISTING_RESULTS → COMPLETED` (or `FAILED`), progress 0/10/35/85/100 at real transitions only. There is at most one active run, and QUEUED runs survive a restart; interrupted RUNNING runs become FAILED. Details: ADR-009, which amends ADR-007.
+Status `QUEUED → RUNNING → COMPLETED | FAILED`. Stage `QUEUED → LOADING_DATA → ANALYZING → GENERATING_EXPLANATIONS → PERSISTING_RESULTS → COMPLETED` (or `FAILED`), progress 0/10/35/50/85/100 at real transitions only; a run without findings skips `GENERATING_EXPLANATIONS`. There is at most one active run, and QUEUED runs survive a restart; interrupted RUNNING runs become FAILED. Details: ADR-009, which amends ADR-007.
 
 ## 7. API
 
@@ -103,11 +109,11 @@ Versioned under `/api/v1` and described by the canonical OpenAPI 3.1 contract [`
 
 ## 8. Persistence
 
-Relational tables for meters, readings, events (Phase 01, see [data model](data-model.md)), analysis runs, and anomalies (Phase 03); JSONB only for evidence detail. Columns that are filtered, sorted, or aggregated are real columns. Indexes follow query shapes (`docs/performance/data-query-strategy.md`). Migrations: goose, run by `cmd/migrate`. Queries: sqlc from Phase 03. Source observation times are timezone-naive (ADR-008). Ingestion is idempotent and never modifies source files.
+Relational tables for meters, readings, events (Phase 01, see [data model](data-model.md)), analysis runs, and anomalies (Phase 03), with each finding's explanation and provenance (Phase 05); JSONB only for evidence detail, the explanation text and the run's configuration snapshots. Columns that are filtered, sorted, or aggregated are real columns. Indexes follow query shapes (`docs/performance/data-query-strategy.md`). Migrations: goose, run by `cmd/migrate`. Queries: sqlc from Phase 03. Source observation times are timezone-naive (ADR-008). Ingestion is idempotent and never modifies source files.
 
 ## 9. Observability
 
-- Structured JSON logs via `slog` with request id, route, status, duration; analysis runs log stage transitions with run id.
+- Structured JSON logs via `slog` with request id, route, status, duration; analysis runs log stage transitions with run id; explanation generation logs provider, model, duration and sanitized fallback code per finding (never prompts, responses or event descriptions).
 - `GET /healthz` (process alive) and `GET /readyz` (database reachable).
 - Prometheus-compatible `/metrics`: HTTP request counts/latency, analysis run duration and outcome, explanation provider fallbacks.
 - No tracing stack in the MVP.
@@ -117,13 +123,13 @@ Relational tables for meters, readings, events (Phase 01, see [data model](data-
 - Input validation at the HTTP boundary returns 4xx with the standard error body.
 - Analysis failures move the run to `FAILED` with a safe summary; partial results are never exposed.
 - Runs orphaned by a crash are marked `FAILED` on startup.
-- Explanation provider failure or timeout falls back to deterministic text; it never fails the run.
+- Explanation provider failure (unreachable, HTTP error, timeout, malformed or ungrounded output) falls back to deterministic text with a sanitized code; it never fails the run. The explanation stage has its own time budget, so a slow model cannot consume the analysis timeout.
 - Database unavailability makes readiness fail; the frontend shows recoverable error states with retry.
 - Graceful shutdown cancels in-flight runs through context.
 
 ## 11. Security Posture
 
-Intentionally minimal authentication for the challenge (OD-12): one configured demo credential compared in constant time, and an HMAC-SHA256-signed session cookie (HttpOnly, SameSite=Lax, Secure unless disabled for local HTTP, 8 hours). There are no users, roles or server-side sessions. Configuration and secrets come from environment variables, and the API refuses to start without them. SQL is always parameterized (sqlc, or explicit pgx statements for ingestion); sort keys are whitelisted. There is no CORS middleware yet: Phase 04 prefers a same-origin proxy and would add only a narrowly configured origin if needed. The LLM receives only structured evidence, never raw credentials or unrelated data.
+Intentionally minimal authentication for the challenge (OD-12): one configured demo credential compared in constant time, and an HMAC-SHA256-signed session cookie (HttpOnly, SameSite=Lax, Secure unless disabled for local HTTP, 8 hours). There are no users, roles or server-side sessions. Configuration and secrets come from environment variables, and the API refuses to start without them. SQL is always parameterized (sqlc, or explicit pgx statements for ingestion); sort keys are whitelisted. There is no CORS middleware: the frontend reaches the API through a same-origin Next.js rewrite (TD-27). The optional local model receives only one finding's structured evidence, never credentials, sessions or other meters; its base URL is trusted server configuration (no request can choose a provider URL), and its output is plain text rendered as text.
 
 ## 12. Scalability And Evolution Paths (Not Implemented)
 

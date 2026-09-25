@@ -24,6 +24,7 @@ import { formatNumber, formatPercentSigned } from "@/lib/format/numbers";
 import { formatDurationHours, formatSourceDateTime, formatSourceShort } from "@/lib/format/time";
 import { queryKeys } from "@/lib/query/keys";
 
+import { ExplanationPanel } from "./explanation-panel";
 import { CONFIDENCE_COMPONENTS, changedVariables, formatOffset, hasExplanation, keyFacts, supportingVariables } from "./evidence";
 
 const ACTION_ICONS: Record<RecommendedAction, LucideIcon> = {
@@ -120,7 +121,11 @@ function ActionCard({ detail }: { detail: AnomalyDetail }) {
             </h2>
           </div>
         </div>
-        <p className="m-0 text-[0.88rem] text-foreground">{actionDescriptions[detail.recommended_action] ?? "Review the stored evidence and the recommended action above."}</p>
+        <p className="m-0 text-[0.88rem] text-foreground [overflow-wrap:anywhere]">
+          {detail.explanation?.recommended_action_text ??
+            actionDescriptions[detail.recommended_action] ??
+            "Review the stored evidence and the recommended action above."}
+        </p>
         <div>
           <Button asChild variant="secondary" size="sm" className="h-auto min-h-[2.3rem] max-w-full whitespace-normal text-left">
             <Link href={`/meters/${encodeURIComponent(detail.meter_id)}`}>View meter {detail.meter_id}</Link>
@@ -307,10 +312,12 @@ export function InvestigationView({ id }: { id: number }) {
                   <h3>What happened</h3>
                   <p>{d.reason}</p>
                 </div>
-                <div className="story-block">
-                  <h3>Why it matters</h3>
-                  <p>{typeMeaning[d.type] ?? "Review the classification and evidence returned by the analysis."}</p>
-                </div>
+                {d.explanation ? null : (
+                  <div className="story-block">
+                    <h3>Why it matters</h3>
+                    <p>{typeMeaning[d.type] ?? "Review the classification and evidence returned by the analysis."}</p>
+                  </div>
+                )}
                 <div className="story-block">
                   <h3>What supports it</h3>
                   <p>
@@ -324,6 +331,8 @@ export function InvestigationView({ id }: { id: number }) {
           </section>
           <ActionCard detail={d} />
         </div>
+
+        <ExplanationPanel explanation={d.explanation} />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Consumption evidence" labelledBy="facts-title">

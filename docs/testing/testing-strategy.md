@@ -85,9 +85,11 @@ Additional: M-109 ranks above all lower-priority findings; event correlation dem
 - The deterministic explanation provider is fully unit-tested per classification.
 - `ExplanationProvider` contract tests run against every implementation.
 - Ollama adapter tests use a local fake HTTP server: request shape, timeout, error, malformed and ungrounded output → fallback.
-- Grounding validation tests reject invented numbers, events, or causes.
+- Grounding validation tests reject all model-authored numbers, duplicate/extra JSON fields, invented events, obvious event-role contradictions, unsupported consequence text and action broadening.
 - Live Ollama validation is optional, manual or opt-in, and recorded separately.
 - The product is verified correct with no LLM configured.
+
+Since Phase 05 (`internal/explanation`): unit tests cover deterministic templates and shared text bounds. Ollama adapter tests cover success; strict unique-key JSON; Unicode length boundaries; response-size boundaries; redirect refusal; HTTP/refused/timeout/cancellation failures; invented numbers/events; event-role, consequence and action contradictions; qualitative payload minimization; and prompt injection. PostgreSQL integration runs cover deterministic/Ollama success, per-finding mixed provenance, five fallback modes, stage budget, analytics failure, read-time call isolation and provenance constraints. Compiled-API and Playwright paths force Ollama unavailable. No required test needs a model; the live local-model smoke remains manual.
 
 ## 11. Regression Strategy
 

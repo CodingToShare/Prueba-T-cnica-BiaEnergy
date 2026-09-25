@@ -54,12 +54,25 @@ type Page struct {
 	Analysis *analysisrun.CompletedRun
 }
 
-// Detail is a finding with its structured evidence.
+// Detail is a finding with its structured evidence and the explanation
+// stored by its run (nil for findings stored before explanations existed).
 type Detail struct {
 	Summary
-	Rule      string
-	Evidence  analysisrun.Evidence
-	CreatedAt time.Time
+	Rule        string
+	Evidence    analysisrun.Evidence
+	Explanation *Explanation
+	CreatedAt   time.Time
+}
+
+// Explanation is the persisted explanation of a finding with its provenance.
+// The sanitized fallback code stays internal (database and logs).
+type Explanation struct {
+	analysisrun.ExplanationText
+	Source        string
+	Model         *string
+	PromptVersion string
+	GeneratedAt   time.Time
+	FallbackUsed  bool
 }
 
 // Service reads anomalies.
@@ -126,5 +139,28 @@ func (s *Service) Get(ctx context.Context, id int64) (Detail, error) {
 	if err := json.Unmarshal(row.Evidence, &d.Evidence); err != nil {
 		return Detail{}, fmt.Errorf("decode evidence of anomaly %d: %w", id, err)
 	}
+	if row.Explanation != nil {
+		// The table constraint anomalies_explanation_complete guarantees the
+		// provenance columns are set together with the explanation.
+		e := Explanation{
+			Source: derefString(row.ExplanationSource), Model: row.ExplanationModel,
+			PromptVersion: derefString(row.ExplanationPromptVersion),
+			FallbackUsed:  row.ExplanationFallbackUsed != nil && *row.ExplanationFallbackUsed,
+		}
+		if row.ExplanationGeneratedAt != nil {
+			e.GeneratedAt = *row.ExplanationGeneratedAt
+		}
+		if err := json.Unmarshal(row.Explanation, &e.ExplanationText); err != nil {
+			return Detail{}, fmt.Errorf("decode explanation of anomaly %d: %w", id, err)
+		}
+		d.Explanation = &e
+	}
 	return d, nil
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

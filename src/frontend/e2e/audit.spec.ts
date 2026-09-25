@@ -184,7 +184,16 @@ test("synthetic long text and large values remain readable at 390 px", async ({ 
     document.querySelector(".story-block p")!.textContent = "Long event description and supporting evidence. ".repeat(40);
     document.querySelector("#action-title")!.textContent = "Review the very long recommended operational action and its recorded supporting evidence";
     document.querySelector('a[href="/meters/M-109"]')!.textContent = `View meter M-${"X".repeat(62)}`;
+    // Explanation fields at their backend maximum (320 / 700 characters),
+    // including one unbroken token, as a verbose model could produce.
+    const explanation = document.querySelector('section[aria-labelledby="explanation-title"]')!;
+    const paragraphs = explanation.querySelectorAll("p");
+    paragraphs[0].textContent = ("Summary ".repeat(35) + "X".repeat(40)).slice(0, 320);
+    paragraphs[1].textContent = ("Why it matters in detail. ".repeat(26) + "Y".repeat(60)).slice(0, 700);
+    paragraphs[2].textContent = ("Evidence narrative sentence. ".repeat(24) + "Z".repeat(60)).slice(0, 700);
+    document.querySelector('section[aria-labelledby="action-title"] p')!.textContent = "Recommended action wording. ".repeat(25).slice(0, 700);
   });
+  await expect(page.getByRole("heading", { name: "Review the very long recommended operational action and its recorded supporting evidence" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   expect(await page.locator(".panel").evaluateAll((panels) => Math.max(...panels.map((p) => p.scrollWidth - p.clientWidth)))).toBeLessThanOrEqual(1);
   await screenshot(page, testInfo, "synthetic-long-investigation");

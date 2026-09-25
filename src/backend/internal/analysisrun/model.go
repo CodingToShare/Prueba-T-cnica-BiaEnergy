@@ -29,12 +29,13 @@ type Stage string
 
 // Run stages.
 const (
-	StageQueued            Stage = "QUEUED"
-	StageLoadingData       Stage = "LOADING_DATA"
-	StageAnalyzing         Stage = "ANALYZING"
-	StagePersistingResults Stage = "PERSISTING_RESULTS"
-	StageCompleted         Stage = "COMPLETED"
-	StageFailed            Stage = "FAILED"
+	StageQueued                 Stage = "QUEUED"
+	StageLoadingData            Stage = "LOADING_DATA"
+	StageAnalyzing              Stage = "ANALYZING"
+	StageGeneratingExplanations Stage = "GENERATING_EXPLANATIONS"
+	StagePersistingResults      Stage = "PERSISTING_RESULTS"
+	StageCompleted              Stage = "COMPLETED"
+	StageFailed                 Stage = "FAILED"
 )
 
 // Progress is the fixed percentage reported when a stage starts. FAILED
@@ -45,6 +46,8 @@ func Progress(s Stage) int {
 		return 10
 	case StageAnalyzing:
 		return 35
+	case StageGeneratingExplanations:
+		return 50
 	case StagePersistingResults:
 		return 85
 	case StageCompleted:

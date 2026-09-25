@@ -13,7 +13,8 @@ import (
 const claimQueuedAnalysisRun = `-- name: ClaimQueuedAnalysisRun :one
 UPDATE analysis_runs
 SET status = 'RUNNING', stage = 'LOADING_DATA', progress_percent = $1, started_at = now(),
-    engine_version = $2, configuration = $3
+    engine_version = $2, configuration = $3,
+    explanation_configuration = $4
 WHERE id = (
     SELECT q.id FROM analysis_runs q
     WHERE q.status = 'QUEUED'
@@ -23,19 +24,25 @@ WHERE id = (
 )
 RETURNING id, status, stage, progress_percent, engine_version, configuration,
           meters_count, readings_count, events_count, findings_count, high_priority_count, aggregate_confidence,
-          error_code, error_message, created_at, started_at, completed_at
+          error_code, error_message, created_at, started_at, completed_at, explanation_configuration
 `
 
 type ClaimQueuedAnalysisRunParams struct {
-	ProgressPercent int16
-	EngineVersion   string
-	Configuration   []byte
+	ProgressPercent          int16
+	EngineVersion            string
+	Configuration            []byte
+	ExplanationConfiguration []byte
 }
 
 // Atomically moves the oldest QUEUED run to RUNNING. SKIP LOCKED lets
 // competing workers pass over a run another worker is claiming.
 func (q *Queries) ClaimQueuedAnalysisRun(ctx context.Context, arg ClaimQueuedAnalysisRunParams) (AnalysisRun, error) {
-	row := q.db.QueryRow(ctx, claimQueuedAnalysisRun, arg.ProgressPercent, arg.EngineVersion, arg.Configuration)
+	row := q.db.QueryRow(ctx, claimQueuedAnalysisRun,
+		arg.ProgressPercent,
+		arg.EngineVersion,
+		arg.Configuration,
+		arg.ExplanationConfiguration,
+	)
 	var i AnalysisRun
 	err := row.Scan(
 		&i.ID,
@@ -55,6 +62,7 @@ func (q *Queries) ClaimQueuedAnalysisRun(ctx context.Context, arg ClaimQueuedAna
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.ExplanationConfiguration,
 	)
 	return i, err
 }
@@ -90,24 +98,25 @@ func (q *Queries) CompleteAnalysisRun(ctx context.Context, arg CompleteAnalysisR
 
 const createAnalysisRun = `-- name: CreateAnalysisRun :one
 
-INSERT INTO analysis_runs (engine_version, configuration)
-VALUES ($1, $2)
+INSERT INTO analysis_runs (engine_version, configuration, explanation_configuration)
+VALUES ($1, $2, $3)
 ON CONFLICT DO NOTHING
 RETURNING id, status, stage, progress_percent, engine_version, configuration,
           meters_count, readings_count, events_count, findings_count, high_priority_count, aggregate_confidence,
-          error_code, error_message, created_at, started_at, completed_at
+          error_code, error_message, created_at, started_at, completed_at, explanation_configuration
 `
 
 type CreateAnalysisRunParams struct {
-	EngineVersion string
-	Configuration []byte
+	EngineVersion            string
+	Configuration            []byte
+	ExplanationConfiguration []byte
 }
 
 // Analysis run lifecycle and result persistence (internal/analysisrun).
 // Inserts a QUEUED run unless another run is active; the partial unique
 // index analysis_runs_single_active then makes this return no row.
 func (q *Queries) CreateAnalysisRun(ctx context.Context, arg CreateAnalysisRunParams) (AnalysisRun, error) {
-	row := q.db.QueryRow(ctx, createAnalysisRun, arg.EngineVersion, arg.Configuration)
+	row := q.db.QueryRow(ctx, createAnalysisRun, arg.EngineVersion, arg.Configuration, arg.ExplanationConfiguration)
 	var i AnalysisRun
 	err := row.Scan(
 		&i.ID,
@@ -127,6 +136,7 @@ func (q *Queries) CreateAnalysisRun(ctx context.Context, arg CreateAnalysisRunPa
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.ExplanationConfiguration,
 	)
 	return i, err
 }
@@ -189,7 +199,7 @@ func (q *Queries) FailInterruptedAnalysisRuns(ctx context.Context, arg FailInter
 const getActiveAnalysisRun = `-- name: GetActiveAnalysisRun :one
 SELECT id, status, stage, progress_percent, engine_version, configuration,
        meters_count, readings_count, events_count, findings_count, high_priority_count, aggregate_confidence,
-       error_code, error_message, created_at, started_at, completed_at
+       error_code, error_message, created_at, started_at, completed_at, explanation_configuration
 FROM analysis_runs
 WHERE status IN ('QUEUED', 'RUNNING')
 `
@@ -215,6 +225,7 @@ func (q *Queries) GetActiveAnalysisRun(ctx context.Context) (AnalysisRun, error)
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.ExplanationConfiguration,
 	)
 	return i, err
 }
@@ -222,7 +233,7 @@ func (q *Queries) GetActiveAnalysisRun(ctx context.Context) (AnalysisRun, error)
 const getAnalysisRun = `-- name: GetAnalysisRun :one
 SELECT id, status, stage, progress_percent, engine_version, configuration,
        meters_count, readings_count, events_count, findings_count, high_priority_count, aggregate_confidence,
-       error_code, error_message, created_at, started_at, completed_at
+       error_code, error_message, created_at, started_at, completed_at, explanation_configuration
 FROM analysis_runs
 WHERE id = $1
 `
@@ -248,6 +259,7 @@ func (q *Queries) GetAnalysisRun(ctx context.Context, id int64) (AnalysisRun, er
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.ExplanationConfiguration,
 	)
 	return i, err
 }
@@ -285,29 +297,41 @@ const insertAnomaly = `-- name: InsertAnomaly :exec
 INSERT INTO anomalies (
     analysis_run_id, meter_id, priority, type, severity, confidence, rule,
     recommended_action, reason, started_at, last_observed_at, duration_seconds,
-    consumption_deviation_pct, evidence
+    consumption_deviation_pct, evidence,
+    explanation, explanation_source, explanation_model, explanation_prompt_version,
+    explanation_generated_at, explanation_fallback_used, explanation_fallback_code
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7,
     $8, $9, $10, $11, $12,
-    $13, $14
+    $13, $14,
+    $15, $16, $17,
+    $18, $19,
+    $20, $21
 )
 `
 
 type InsertAnomalyParams struct {
-	AnalysisRunID           int64
-	MeterID                 string
-	Priority                int32
-	Type                    string
-	Severity                string
-	Confidence              float64
-	Rule                    string
-	RecommendedAction       string
-	Reason                  string
-	StartedAt               time.Time
-	LastObservedAt          time.Time
-	DurationSeconds         int64
-	ConsumptionDeviationPct float64
-	Evidence                []byte
+	AnalysisRunID            int64
+	MeterID                  string
+	Priority                 int32
+	Type                     string
+	Severity                 string
+	Confidence               float64
+	Rule                     string
+	RecommendedAction        string
+	Reason                   string
+	StartedAt                time.Time
+	LastObservedAt           time.Time
+	DurationSeconds          int64
+	ConsumptionDeviationPct  float64
+	Evidence                 []byte
+	Explanation              []byte
+	ExplanationSource        *string
+	ExplanationModel         *string
+	ExplanationPromptVersion *string
+	ExplanationGeneratedAt   *time.Time
+	ExplanationFallbackUsed  *bool
+	ExplanationFallbackCode  *string
 }
 
 func (q *Queries) InsertAnomaly(ctx context.Context, arg InsertAnomalyParams) error {
@@ -326,6 +350,13 @@ func (q *Queries) InsertAnomaly(ctx context.Context, arg InsertAnomalyParams) er
 		arg.DurationSeconds,
 		arg.ConsumptionDeviationPct,
 		arg.Evidence,
+		arg.Explanation,
+		arg.ExplanationSource,
+		arg.ExplanationModel,
+		arg.ExplanationPromptVersion,
+		arg.ExplanationGeneratedAt,
+		arg.ExplanationFallbackUsed,
+		arg.ExplanationFallbackCode,
 	)
 	return err
 }

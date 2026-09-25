@@ -164,6 +164,8 @@ async function main() {
       DEMO_AUTH_PASSWORD: password,
       SESSION_SIGNING_KEY: randomBytes(32).toString("hex"),
       SESSION_COOKIE_SECURE: "false",
+      // The default explicitly, so a developer's own Ollama settings never apply.
+      EXPLANATION_PROVIDER: "deterministic",
     },
   };
   const apiProcess = start("api", join(workDir, `api${exe}`), [], apiOptions);
@@ -213,6 +215,23 @@ async function main() {
       },
     });
     log("real API outage → safe dashboard error → restart → retry: passed");
+
+    // Ollama configured but unreachable: the analysis must still complete and
+    // the investigation shows the deterministic fallback.
+    const { verifyExplanationFallback } = await import("./explanation-fallback.mjs");
+    const unreachableOllama = `http://127.0.0.1:${await freePort()}`;
+    await verifyExplanationFallback({ baseUrl, username, password, frontendDir,
+      restartAPIWithOllama: async () => {
+        for (const child of children.filter((c) => c.label.startsWith("api"))) {
+          await stop(child);
+        }
+        const ollamaOptions = { ...apiOptions, env: { ...apiOptions.env,
+          EXPLANATION_PROVIDER: "ollama", OLLAMA_BASE_URL: unreachableOllama, OLLAMA_MODEL: "llama3.2:3b", OLLAMA_TIMEOUT: "5s" } };
+        const restarted = start("api-ollama-unavailable", join(workDir, `api${exe}`), [], ollamaOptions);
+        await waitFor("API with unavailable Ollama", () => httpOk(`http://127.0.0.1:${apiPort}/readyz`), 30_000, restarted);
+      },
+    });
+    log("Ollama unavailable → analysis completed → deterministic fallback shown: passed");
   }
   return playwrightStatus;
 }

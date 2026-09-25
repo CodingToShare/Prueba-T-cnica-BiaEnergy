@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -17,10 +18,20 @@ func TestProgress_FollowsTheRealStagesOnly(t *testing.T) {
 	assert.Equal(t, 0, Progress(StageQueued))
 	assert.Equal(t, 10, Progress(StageLoadingData))
 	assert.Equal(t, 35, Progress(StageAnalyzing))
+	assert.Equal(t, 50, Progress(StageGeneratingExplanations))
 	assert.Equal(t, 85, Progress(StagePersistingResults))
 	assert.Equal(t, 100, Progress(StageCompleted))
 	assert.Less(t, Progress(StageLoadingData), Progress(StageAnalyzing))
-	assert.Less(t, Progress(StageAnalyzing), Progress(StagePersistingResults))
+	assert.Less(t, Progress(StageAnalyzing), Progress(StageGeneratingExplanations))
+	assert.Less(t, Progress(StageGeneratingExplanations), Progress(StagePersistingResults))
+}
+
+func TestFallbackCode_ClassifiesProviderFailuresWithoutRawErrors(t *testing.T) {
+	assert.Equal(t, FallbackProviderUnavailable, FallbackCode(&ExplanationError{Code: FallbackProviderUnavailable, Err: errors.New("dial tcp: connection refused")}))
+	assert.Equal(t, FallbackValidationFailed, FallbackCode(fmt.Errorf("wrapped: %w", &ExplanationError{Code: FallbackValidationFailed, Err: errors.New("x")})))
+	assert.Equal(t, FallbackTimeout, FallbackCode(fmt.Errorf("call: %w", context.DeadlineExceeded)), "deadlines are timeouts whatever the provider says")
+	assert.Equal(t, FallbackTimeout, FallbackCode(&ExplanationError{Code: FallbackProviderError, Err: context.DeadlineExceeded}))
+	assert.Equal(t, FallbackProviderError, FallbackCode(errors.New("unclassified")))
 }
 
 func TestFailureMessages_AreSafeAndDefinedForEveryCode(t *testing.T) {

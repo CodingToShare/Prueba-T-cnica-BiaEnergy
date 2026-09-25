@@ -210,16 +210,39 @@ func anomalyList(p anomaly.Page, limit, offset int) anomalyListDTO {
 
 type anomalyDetailDTO struct {
 	anomalySummaryDTO
-	Rule      string               `json:"rule"`
-	CreatedAt jsontime.System      `json:"created_at"`
-	Evidence  analysisrun.Evidence `json:"evidence"`
+	Rule        string               `json:"rule"`
+	CreatedAt   jsontime.System      `json:"created_at"`
+	Evidence    analysisrun.Evidence `json:"evidence"`
+	Explanation *explanationDTO      `json:"explanation"`
+}
+
+// explanationDTO is the operator-facing explanation and its provenance.
+type explanationDTO struct {
+	Source                string          `json:"source"`
+	Summary               string          `json:"summary"`
+	WhyItMatters          string          `json:"why_it_matters"`
+	EvidenceNarrative     string          `json:"evidence_narrative"`
+	RecommendedActionText string          `json:"recommended_action_text"`
+	Model                 *string         `json:"model"`
+	PromptVersion         string          `json:"prompt_version"`
+	GeneratedAt           jsontime.System `json:"generated_at"`
+	FallbackUsed          bool            `json:"fallback_used"`
 }
 
 func anomalyDetail(d anomaly.Detail) anomalyDetailDTO {
-	return anomalyDetailDTO{
+	out := anomalyDetailDTO{
 		anomalySummaryDTO: anomalySummary(d.Summary), Rule: d.Rule,
 		CreatedAt: jsontime.System(d.CreatedAt), Evidence: d.Evidence,
 	}
+	if e := d.Explanation; e != nil {
+		out.Explanation = &explanationDTO{
+			Source: e.Source, Summary: e.Summary, WhyItMatters: e.WhyItMatters,
+			EvidenceNarrative: e.EvidenceNarrative, RecommendedActionText: e.RecommendedActionText,
+			Model: e.Model, PromptVersion: e.PromptVersion,
+			GeneratedAt: jsontime.System(e.GeneratedAt), FallbackUsed: e.FallbackUsed,
+		}
+	}
+	return out
 }
 
 type runErrorDTO struct {

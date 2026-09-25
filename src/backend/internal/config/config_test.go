@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 )
 
 func env(values map[string]string) func(string) string {
@@ -156,5 +157,58 @@ func TestLoadAPI_MissingOrInvalidAuth_FailsWithoutEchoingSecrets(t *testing.T) {
 func TestLoad_SharedConfigurationDoesNotRequireAuth(t *testing.T) {
 	if _, err := Load(env(map[string]string{EnvDatabaseURL: "postgres://u:p@localhost/db"})); err != nil {
 		t.Fatalf("migrate and seed must not need authentication settings: %v", err)
+	}
+}
+
+func TestLoadAPI_ExplanationDefaultsToTheDeterministicProvider(t *testing.T) {
+	cfg, err := LoadAPI(withEnv(nil))
+	if err != nil {
+		t.Fatalf("LoadAPI: %v", err)
+	}
+	if cfg.Explanation.Provider != ProviderDeterministic {
+		t.Fatalf("default provider = %q, want %q (the product must work without Ollama)", cfg.Explanation.Provider, ProviderDeterministic)
+	}
+	if cfg.Explanation.OllamaBaseURL != "http://127.0.0.1:11434" || cfg.Explanation.OllamaTimeout != 60*time.Second {
+		t.Fatalf("unexpected Ollama defaults: %+v", cfg.Explanation)
+	}
+	// Ollama settings are ignored (not validated) while the provider is deterministic.
+	if _, err := LoadAPI(withEnv(map[string]string{EnvOllamaBaseURL: "not a url", EnvOllamaTimeout: "soon"})); err != nil {
+		t.Fatalf("deterministic mode must not depend on Ollama settings: %v", err)
+	}
+}
+
+func TestLoadAPI_OllamaProvider_RequiresAModelAndValidSettings(t *testing.T) {
+	cfg, err := LoadAPI(withEnv(map[string]string{
+		EnvExplanationProvider: " Ollama ", EnvOllamaModel: "llama3.2:3b",
+		EnvOllamaBaseURL: "http://localhost:11434", EnvOllamaTimeout: "45s",
+	}))
+	if err != nil {
+		t.Fatalf("LoadAPI: %v", err)
+	}
+	want := ExplanationConfig{Provider: ProviderOllama, OllamaBaseURL: "http://localhost:11434", OllamaModel: "llama3.2:3b", OllamaTimeout: 45 * time.Second}
+	if cfg.Explanation != want {
+		t.Fatalf("got %+v, want %+v", cfg.Explanation, want)
+	}
+
+	_, err = LoadAPI(withEnv(map[string]string{
+		EnvExplanationProvider: "ollama",
+		EnvOllamaBaseURL:       "http://user:hunter2@example.test",
+		EnvOllamaTimeout:       "10m",
+	}))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	msg := err.Error()
+	for _, want := range []string{EnvOllamaModel, EnvOllamaBaseURL, EnvOllamaTimeout} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("error %q does not mention %q", msg, want)
+		}
+	}
+	if strings.Contains(msg, "hunter2") {
+		t.Errorf("error leaks URL credentials: %q", msg)
+	}
+
+	if _, err := LoadAPI(withEnv(map[string]string{EnvExplanationProvider: "openai"})); err == nil || !strings.Contains(err.Error(), EnvExplanationProvider) {
+		t.Fatalf("an unknown provider must be rejected, got %v", err)
 	}
 }

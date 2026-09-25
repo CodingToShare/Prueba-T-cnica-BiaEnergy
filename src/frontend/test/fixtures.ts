@@ -6,6 +6,7 @@ import type {
   AnomalyDetail,
   AnomalyList,
   DashboardSummary,
+  Explanation,
   MeterList,
   MeterSummary,
 } from "@/lib/api/types";
@@ -116,6 +117,8 @@ export function anomalyDetail(overrides: Partial<AnomalyDetail> = {}): AnomalyDe
     ...anomalyList.items[0],
     rule: "UNEXPLAINED_PERSISTENT_CONSUMPTION_SHIFT",
     created_at: "2030-02-01T10:00:02Z",
+    // Findings stored before explanations existed; see explanation() below.
+    explanation: null,
     evidence: {
       schema_version: 1,
       rule: "UNEXPLAINED_PERSISTENT_CONSUMPTION_SHIFT",
@@ -206,6 +209,22 @@ export function anomalyDetail(overrides: Partial<AnomalyDetail> = {}): AnomalyDe
         },
       ],
     },
+    ...overrides,
+  };
+}
+
+/** A stored explanation (fictional text); override source/model/fallback per test. */
+export function explanation(overrides: Partial<Explanation> = {}): Explanation {
+  return {
+    source: "DETERMINISTIC",
+    summary: "Consumption rose above its hourly baseline and no recorded event explains the change.",
+    why_it_matters: "A persistent unexplained change may point to a fault or an unexpected load.",
+    evidence_narrative: "Current and power factor changed in the same period; the unknown event is context only.",
+    recommended_action_text: "Inspect the meter and its installation on site.",
+    model: null,
+    prompt_version: "evidence-template-v1",
+    generated_at: "2030-02-01T10:00:02Z",
+    fallback_used: false,
     ...overrides,
   };
 }

@@ -20,43 +20,51 @@ type AnalysisMeterResult struct {
 }
 
 type AnalysisRun struct {
-	ID                  int64
-	Status              string
-	Stage               string
-	ProgressPercent     int16
-	EngineVersion       string
-	Configuration       []byte
-	MetersCount         *int32
-	ReadingsCount       *int32
-	EventsCount         *int32
-	FindingsCount       *int32
-	HighPriorityCount   *int32
-	AggregateConfidence *float64
-	ErrorCode           *string
-	ErrorMessage        *string
-	CreatedAt           time.Time
-	StartedAt           *time.Time
-	CompletedAt         *time.Time
+	ID                       int64
+	Status                   string
+	Stage                    string
+	ProgressPercent          int16
+	EngineVersion            string
+	Configuration            []byte
+	MetersCount              *int32
+	ReadingsCount            *int32
+	EventsCount              *int32
+	FindingsCount            *int32
+	HighPriorityCount        *int32
+	AggregateConfidence      *float64
+	ErrorCode                *string
+	ErrorMessage             *string
+	CreatedAt                time.Time
+	StartedAt                *time.Time
+	CompletedAt              *time.Time
+	ExplanationConfiguration []byte
 }
 
 type Anomaly struct {
-	ID                      int64
-	AnalysisRunID           int64
-	MeterID                 string
-	Priority                int32
-	Type                    string
-	Severity                string
-	Confidence              float64
-	Rule                    string
-	RecommendedAction       string
-	Reason                  string
-	StartedAt               time.Time
-	LastObservedAt          time.Time
-	DurationSeconds         int64
-	ConsumptionDeviationPct float64
-	Status                  string
-	Evidence                []byte
-	CreatedAt               time.Time
+	ID                       int64
+	AnalysisRunID            int64
+	MeterID                  string
+	Priority                 int32
+	Type                     string
+	Severity                 string
+	Confidence               float64
+	Rule                     string
+	RecommendedAction        string
+	Reason                   string
+	StartedAt                time.Time
+	LastObservedAt           time.Time
+	DurationSeconds          int64
+	ConsumptionDeviationPct  float64
+	Status                   string
+	Evidence                 []byte
+	CreatedAt                time.Time
+	Explanation              []byte
+	ExplanationSource        *string
+	ExplanationModel         *string
+	ExplanationPromptVersion *string
+	ExplanationGeneratedAt   *time.Time
+	ExplanationFallbackUsed  *bool
+	ExplanationFallbackCode  *string
 }
 
 type Event struct {

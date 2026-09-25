@@ -41,14 +41,42 @@ func (q *Queries) CountCurrentAnomalies(ctx context.Context, arg CountCurrentAno
 const getAnomaly = `-- name: GetAnomaly :one
 SELECT id, analysis_run_id, meter_id, priority, type, severity, confidence, rule,
        recommended_action, reason, started_at, last_observed_at, duration_seconds,
-       consumption_deviation_pct, status, evidence, created_at
+       consumption_deviation_pct, status, evidence, created_at,
+       explanation, explanation_source, explanation_model, explanation_prompt_version,
+       explanation_generated_at, explanation_fallback_used
 FROM anomalies
 WHERE id = $1
 `
 
-func (q *Queries) GetAnomaly(ctx context.Context, id int64) (Anomaly, error) {
+type GetAnomalyRow struct {
+	ID                       int64
+	AnalysisRunID            int64
+	MeterID                  string
+	Priority                 int32
+	Type                     string
+	Severity                 string
+	Confidence               float64
+	Rule                     string
+	RecommendedAction        string
+	Reason                   string
+	StartedAt                time.Time
+	LastObservedAt           time.Time
+	DurationSeconds          int64
+	ConsumptionDeviationPct  float64
+	Status                   string
+	Evidence                 []byte
+	CreatedAt                time.Time
+	Explanation              []byte
+	ExplanationSource        *string
+	ExplanationModel         *string
+	ExplanationPromptVersion *string
+	ExplanationGeneratedAt   *time.Time
+	ExplanationFallbackUsed  *bool
+}
+
+func (q *Queries) GetAnomaly(ctx context.Context, id int64) (GetAnomalyRow, error) {
 	row := q.db.QueryRow(ctx, getAnomaly, id)
-	var i Anomaly
+	var i GetAnomalyRow
 	err := row.Scan(
 		&i.ID,
 		&i.AnalysisRunID,
@@ -67,6 +95,12 @@ func (q *Queries) GetAnomaly(ctx context.Context, id int64) (Anomaly, error) {
 		&i.Status,
 		&i.Evidence,
 		&i.CreatedAt,
+		&i.Explanation,
+		&i.ExplanationSource,
+		&i.ExplanationModel,
+		&i.ExplanationPromptVersion,
+		&i.ExplanationGeneratedAt,
+		&i.ExplanationFallbackUsed,
 	)
 	return i, err
 }

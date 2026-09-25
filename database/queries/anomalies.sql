@@ -37,6 +37,8 @@ WHERE (sqlc.narg('meter_id')::text IS NULL OR a.meter_id = sqlc.narg('meter_id')
 -- name: GetAnomaly :one
 SELECT id, analysis_run_id, meter_id, priority, type, severity, confidence, rule,
        recommended_action, reason, started_at, last_observed_at, duration_seconds,
-       consumption_deviation_pct, status, evidence, created_at
+       consumption_deviation_pct, status, evidence, created_at,
+       explanation, explanation_source, explanation_model, explanation_prompt_version,
+       explanation_generated_at, explanation_fallback_used
 FROM anomalies
 WHERE id = @id;

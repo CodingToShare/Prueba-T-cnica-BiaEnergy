@@ -11,14 +11,16 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phases 00–04 are Complete. Phase 04 passed an independent frontend/UX audit and remains uncommitted.
+Phases 00–05 are Complete. Phase 04 passed an independent frontend/UX audit and is committed (`699da3f`); Phase 05 passed an independent explainability audit and awaits its checkpoint commit.
 
 - **Phase 01:** the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import.
 - **Phase 02:** the pure deterministic anomaly engine `internal/analysis`.
 - **Phase 03:** the versioned API (`docs/api/openapi.yaml`) with demo login, PostgreSQL-backed background analysis runs (ADR-009), persisted findings and evidence, and meter, anomaly and dashboard endpoints.
 - **Phase 04:** the Next.js product UI: login, dashboard, meters, charts, analysis progress, anomalies and evidence-based investigation; independent audit evidence is recorded in its phase document.
 
-**No explanation provider exists yet.** Phase 05 is not authorized or started. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
+- **Phase 05:** the `ExplanationProvider` boundary with the deterministic provider (default and fallback) and an optional local Ollama provider (`internal/explanation`); explanations are generated during the run, validated, persisted with provenance and shown on the investigation page (`docs/ai/explainability.md`).
+
+Phase 06 (quality, observability, delivery, CI) is not authorized or started. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
 
 ## How Agents Work Here
 

@@ -1,6 +1,6 @@
 // Pure helpers for presenting an analysis run exactly as the backend reports
-// it (ADR-009: QUEUED → LOADING_DATA → ANALYZING → PERSISTING_RESULTS →
-// COMPLETED, or FAILED). Nothing here simulates progress.
+// it (ADR-009: QUEUED → LOADING_DATA → ANALYZING → GENERATING_EXPLANATIONS →
+// PERSISTING_RESULTS → COMPLETED, or FAILED). Nothing here simulates progress.
 import type { AnalysisRun, RunStage, RunStatus } from "@/lib/api/types";
 import { stageLabels } from "@/lib/format/labels";
 
@@ -16,7 +16,14 @@ export function isActive(status: RunStatus): boolean {
 }
 
 /** The lifecycle steps shown under the progress bar, in order. */
-export const RUN_STEPS: readonly RunStage[] = ["QUEUED", "LOADING_DATA", "ANALYZING", "PERSISTING_RESULTS", "COMPLETED"];
+export const RUN_STEPS: readonly RunStage[] = [
+  "QUEUED",
+  "LOADING_DATA",
+  "ANALYZING",
+  "GENERATING_EXPLANATIONS",
+  "PERSISTING_RESULTS",
+  "COMPLETED",
+];
 
 export type StepState = "done" | "current" | "pending";
 

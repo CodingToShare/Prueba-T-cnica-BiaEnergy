@@ -25,6 +25,7 @@ import (
 	"bia-energy.local/backend/internal/anomaly"
 	"bia-energy.local/backend/internal/auth"
 	"bia-energy.local/backend/internal/dashboard"
+	"bia-energy.local/backend/internal/explanation"
 	"bia-energy.local/backend/internal/meter"
 	"bia-energy.local/backend/internal/platform/postgres/pgtest"
 )
@@ -47,7 +48,8 @@ func newStack(t *testing.T, pool *pgxpool.Pool, analyzer analysisrun.Analyzer) *
 		require.NoError(t, err)
 		analyzer = e
 	}
-	runs, err := analysisrun.NewService(pool, analyzer, analysis.EngineVersion, analysis.DefaultConfig(), logger, analysisrun.Options{})
+	explainers := analysisrun.Explainers{Primary: explanation.Deterministic{}, Settings: explanation.DeterministicSettings()}
+	runs, err := analysisrun.NewService(pool, analyzer, explainers, analysis.EngineVersion, analysis.DefaultConfig(), logger, analysisrun.Options{})
 	require.NoError(t, err)
 	authManager, err := auth.NewManager(testAuth, nil)
 	require.NoError(t, err)

@@ -40,14 +40,32 @@ func TestMigrations_EmptyDatabase_UpDownUp(t *testing.T) {
 
 	applied, err := m.Up(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []int64{1, 2}, applied)
+	assert.Equal(t, []int64{1, 2, 3}, applied)
 	assert.Equal(t, allTables, tableNames(t, db.Pool))
+	assert.True(t, hasColumn(t, db.Pool, "anomalies", "explanation"))
+	assert.True(t, hasColumn(t, db.Pool, "analysis_runs", "explanation_configuration"))
 
 	again, err := m.Up(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, again, "re-running up is a no-op")
 
+	// A run caught in the explanation stage does not block the rollback.
+	_, err = db.Pool.Exec(ctx, `INSERT INTO analysis_runs (engine_version, configuration, status, stage, progress_percent)
+		VALUES ('v', '{}', 'RUNNING', 'GENERATING_EXPLANATIONS', 50)`)
+	require.NoError(t, err)
 	rolledBack, err := m.Down(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), rolledBack)
+	assert.Equal(t, allTables, tableNames(t, db.Pool), "down 3 removes only the explanation columns")
+	assert.False(t, hasColumn(t, db.Pool, "anomalies", "explanation"))
+	assert.False(t, hasColumn(t, db.Pool, "analysis_runs", "explanation_configuration"))
+	var stage string
+	require.NoError(t, db.Pool.QueryRow(ctx, "SELECT stage FROM analysis_runs").Scan(&stage))
+	assert.Equal(t, "ANALYZING", stage)
+	_, err = db.Pool.Exec(ctx, "DELETE FROM analysis_runs")
+	require.NoError(t, err)
+
+	rolledBack, err = m.Down(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), rolledBack)
 	assert.Equal(t, sourceTables, tableNames(t, db.Pool), "down removes only the analysis tables; source data stays")
@@ -59,8 +77,17 @@ func TestMigrations_EmptyDatabase_UpDownUp(t *testing.T) {
 
 	reapplied, err := m.Up(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []int64{1, 2}, reapplied)
+	assert.Equal(t, []int64{1, 2, 3}, reapplied)
 	assert.Equal(t, allTables, tableNames(t, db.Pool))
+}
+
+func hasColumn(t *testing.T, pool *pgxpool.Pool, table, column string) bool {
+	t.Helper()
+	var exists bool
+	require.NoError(t, pool.QueryRow(context.Background(),
+		`SELECT EXISTS (SELECT 1 FROM information_schema.columns
+		 WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2)`, table, column).Scan(&exists))
+	return exists
 }
 
 var (

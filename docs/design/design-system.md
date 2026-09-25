@@ -39,7 +39,7 @@ Defined once as CSS variables, mapped into Tailwind, shadcn/ui theming, and the 
 | Chart | `chart-series-1…5`, `chart-baseline-band`, `chart-anomaly-region`, `chart-event-marker`, `chart-data-quality-marker`, `chart-grid`, `chart-axis` | Navy + accents |
 | Shape | `radius-sm/md/lg/xl`, `shadow-xs/sm/md/lg` | Reference |
 
-No other color values may appear in components. Final values are confirmed in Phase 04 with WCAG AA contrast checks; a value may be adjusted for contrast while keeping its hue family.
+No other color values may appear in components. Final values were confirmed in Phase 04 with WCAG AA contrast checks (measured status tones 4.82–9.95:1; the placeholder token was darkened to 5.59:1); a value may be adjusted for contrast while keeping its hue family.
 
 ## 4. Energy Management Semantics
 
@@ -134,3 +134,11 @@ Where the contract lives in code (`src/frontend`):
 - **Deviations from §6, recorded:** there is no continuous baseline band, because the API exposes the baseline only for flagged readings and the browser must not recompute it. A full band needs a backend baseline series (deferred). Data-quality events use the same event marker as other events; their role badge in the investigation carries the meaning. Metrics are shown one at a time with a segmented selector instead of stacked shared-axis panels, which keeps the chart readable at 390 px.
 
 Visual review (Phase 04): the desktop 1440 px, tablet 768 px and mobile 390 px screens were captured by the real-stack Playwright run and compared with the reference for hierarchy, typography, spacing, surfaces, badges, tables, navigation and states. `docs/design/reference/design-system-v3.html` was not modified.
+
+## 11. Explanation Panel (Phase 05)
+
+The investigation's **Explanation** panel reuses existing patterns; nothing in it is styled as "AI":
+
+- **Structure.** A `.panel` with the title "Explanation" and a subtle provenance line in the panel head: muted text with a lucide icon, `FileText` for evidence-based text and `Cpu` for text generated locally. The text reads "Evidence-based explanation", "Evidence-based fallback" or "Generated locally with <model>". Below it come a lead summary (heading color, semibold), a `.story` grid with "Why it matters" and "Evidence", one muted sentence of transparency copy, and a collapsed `<details>` ("About this explanation") holding an `.evidence-list` of source, model, prompt version, generation time and fallback status.
+- **Placement.** Full width under the finding summary and action card, above the structured evidence it summarizes. When an explanation exists, the frontend's static "Why it matters" block is omitted from the summary so it is not said twice. The action card keeps the label from the deterministic action code and uses the explanation's action wording as its description.
+- **Content rules.** Plain text only, wrapped with `overflow-wrap: anywhere` so maximum-length text (320/700 characters, including unbroken tokens) never causes horizontal overflow at 390 px. No live region; a fallback is a label, never an error banner. There is no regenerate control.

@@ -90,7 +90,7 @@ Final run from a fresh shell context (PATH from the registry, default execution 
 | Ollama compute | CUDA on the GTX 1050 (4.0 GiB total, about 3.3 GiB available); CPU fallback for layers that do not fit |
 | Free disk | About 620 GiB on C:, about 1.8 TiB on D: |
 
-No model was downloaded. Model choice is deferred to Phase 05 (OD-16). Constraints: 4 GiB VRAM favors small quantized models that fit on the GPU, and generation latency must stay within the explanation timeout. Ollama auto-updates by default; disable it in Ollama's settings if the version must stay fixed during the demo.
+No model was downloaded at readiness time; the model choice was deferred to Phase 05 (OD-16). Update (Phase 05, 2026-09-25): `llama3.2:3b` (2.0 GB, Q4_K_M) was pulled with `ollama pull` for the optional live validation; the product and all automated tests need no model. Constraints: 4 GiB VRAM favors small quantized models that fit on the GPU, and generation latency must stay within the explanation timeout. Ollama auto-updates by default; disable it in Ollama's settings if the version must stay fixed during the demo.
 
 ## Port Check
 

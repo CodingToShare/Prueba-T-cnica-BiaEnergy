@@ -62,6 +62,7 @@ export const stageLabels: Record<RunStage, string> = {
   QUEUED: "Queued",
   LOADING_DATA: "Loading data",
   ANALYZING: "Analyzing",
+  GENERATING_EXPLANATIONS: "Writing explanations",
   PERSISTING_RESULTS: "Saving results",
   COMPLETED: "Completed",
   FAILED: "Failed",

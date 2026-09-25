@@ -33,6 +33,12 @@ const (
 type Options struct {
 	RunTimeout   time.Duration
 	PollInterval time.Duration
+	// ExplanationTimeout is an extra budget for the explanation stage, added
+	// to the run timeout. Zero means explanations share the run timeout (the
+	// deterministic provider needs microseconds); a generative provider gets
+	// a dedicated budget so that a slow model degrades to the fallback
+	// instead of timing out the whole run.
+	ExplanationTimeout time.Duration
 }
 
 // Service creates, reads and executes analysis runs. PostgreSQL is the
@@ -42,20 +48,32 @@ type Service struct {
 	pool          *pgxpool.Pool
 	queries       *dbgen.Queries
 	analyzer      Analyzer
+	explainers    Explainers
 	engineVersion string
 	configuration []byte
-	logger        *slog.Logger
-	runTimeout    time.Duration
-	pollInterval  time.Duration
-	wake          chan struct{}
+	// explanationConfiguration is the JSON of explainers.Settings.
+	explanationConfiguration []byte
+	logger                   *slog.Logger
+	runTimeout               time.Duration
+	explanationTimeout       time.Duration
+	pollInterval             time.Duration
+	wake                     chan struct{}
 }
 
 // NewService prepares the orchestration. configuration is the JSON snapshot
-// of the engine configuration stored with every run.
-func NewService(pool *pgxpool.Pool, analyzer Analyzer, engineVersion string, configuration any, logger *slog.Logger, opts Options) (*Service, error) {
+// of the engine configuration stored with every run; explainers produce the
+// explanation of each finding.
+func NewService(pool *pgxpool.Pool, analyzer Analyzer, explainers Explainers, engineVersion string, configuration any, logger *slog.Logger, opts Options) (*Service, error) {
 	snapshot, err := json.Marshal(configuration)
 	if err != nil {
 		return nil, fmt.Errorf("encode analysis configuration snapshot: %w", err)
+	}
+	if explainers.Primary == nil {
+		return nil, errors.New("an explanation provider is required")
+	}
+	explanationSnapshot, err := json.Marshal(explainers.Settings)
+	if err != nil {
+		return nil, fmt.Errorf("encode explanation configuration snapshot: %w", err)
 	}
 	if opts.RunTimeout <= 0 {
 		opts.RunTimeout = DefaultRunTimeout
@@ -67,12 +85,16 @@ func NewService(pool *pgxpool.Pool, analyzer Analyzer, engineVersion string, con
 		pool:          pool,
 		queries:       dbgen.New(pool),
 		analyzer:      analyzer,
+		explainers:    explainers,
 		engineVersion: engineVersion,
 		configuration: snapshot,
-		logger:        logger,
-		runTimeout:    opts.RunTimeout,
-		pollInterval:  opts.PollInterval,
-		wake:          make(chan struct{}, 1),
+
+		explanationConfiguration: explanationSnapshot,
+		logger:                   logger,
+		runTimeout:               opts.RunTimeout,
+		explanationTimeout:       max(opts.ExplanationTimeout, 0),
+		pollInterval:             opts.PollInterval,
+		wake:                     make(chan struct{}, 1),
 	}, nil
 }
 
@@ -84,6 +106,8 @@ func (s *Service) Request(ctx context.Context) (run Run, created bool, err error
 		row, err := s.queries.CreateAnalysisRun(ctx, dbgen.CreateAnalysisRunParams{
 			EngineVersion: s.engineVersion,
 			Configuration: s.configuration,
+
+			ExplanationConfiguration: s.explanationConfiguration,
 		})
 		if err == nil {
 			s.logger.InfoContext(ctx, "analysis queued", "analysis_id", row.ID)
@@ -177,6 +201,8 @@ func (s *Service) ProcessNext(ctx context.Context) (bool, error) {
 	row, err := s.queries.ClaimQueuedAnalysisRun(ctx, dbgen.ClaimQueuedAnalysisRunParams{
 		ProgressPercent: int16(Progress(StageLoadingData)),
 		EngineVersion:   s.engineVersion, Configuration: s.configuration,
+
+		ExplanationConfiguration: s.explanationConfiguration,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -206,7 +232,7 @@ func (s *Service) execute(ctx context.Context, id int64) {
 	log := s.logger.With("analysis_id", id)
 	log.InfoContext(ctx, "analysis started", "stage", StageLoadingData)
 
-	runCtx, cancel := context.WithTimeout(ctx, s.runTimeout)
+	runCtx, cancel := context.WithTimeout(ctx, s.runTimeout+s.explanationTimeout)
 	defer cancel()
 	findings, err := s.perform(runCtx, id, log)
 	elapsed := time.Since(start).Milliseconds()
@@ -270,10 +296,26 @@ func (s *Service) perform(ctx context.Context, id int64, log *slog.Logger) (int,
 	}
 	log.InfoContext(ctx, "engine completed", "findings", len(result.Findings), "duration_ms", time.Since(engineStart).Milliseconds())
 
+	evidence := make([]Evidence, len(result.Findings))
+	for i, f := range result.Findings {
+		evidence[i] = EvidenceOf(f)
+	}
+	var explanations []*storedExplanation
+	if len(result.Findings) > 0 {
+		if err := s.setStage(ctx, id, StageGeneratingExplanations); err != nil {
+			return 0, failAt(CodeAnalysisFailed, err)
+		}
+		// Only the run's own cancellation (shutdown or run timeout) stops this
+		// stage; provider failures fall back to the deterministic text.
+		if explanations, err = s.explain(ctx, result.Findings, evidence, log); err != nil {
+			return 0, failAt(CodeAnalysisFailed, err)
+		}
+	}
+
 	if err := s.setStage(ctx, id, StagePersistingResults); err != nil {
 		return 0, failAt(CodePersistenceFailed, err)
 	}
-	if err := s.persist(ctx, id, result); err != nil {
+	if err := s.persist(ctx, id, result, evidence, explanations); err != nil {
 		return 0, failAt(CodePersistenceFailed, err)
 	}
 	log.InfoContext(ctx, "findings persisted", "findings", len(result.Findings))
@@ -337,9 +379,74 @@ func (s *Service) load(ctx context.Context) ([]analysis.Reading, []analysis.Even
 	return readings, events, meters, nil
 }
 
-// persist writes the meter statuses and findings and completes the run in
-// one transaction: either all of it becomes visible, or none of it does.
-func (s *Service) persist(ctx context.Context, id int64, result analysis.Result) error {
+// explain produces one explanation per finding, sequentially: the supplied
+// data has a handful of findings, and a local model serves one request at a
+// time anyway. The stage has its own budget (Options.ExplanationTimeout);
+// when it is exhausted the remaining findings get the deterministic text.
+// It returns an error only when the run itself is cancelled.
+func (s *Service) explain(ctx context.Context, findings []analysis.Finding, evidence []Evidence, log *slog.Logger) ([]*storedExplanation, error) {
+	stageCtx := ctx
+	if s.explanationTimeout > 0 {
+		var cancel context.CancelFunc
+		stageCtx, cancel = context.WithTimeout(ctx, s.explanationTimeout)
+		defer cancel()
+	}
+	settings := s.explainers.Settings
+	log.InfoContext(ctx, "explanation generation started", "findings", len(findings), "provider", settings.Provider, "model", settings.Model)
+	out := make([]*storedExplanation, len(findings))
+	for i, f := range findings {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		out[i] = s.explainOne(ctx, stageCtx, inputOf(f, evidence[i]), log)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// explainOne never fails the run: a primary-provider failure is replaced by
+// the fallback text and a sanitized code; if no text can be produced the
+// finding is stored without an explanation. Raw provider errors, prompts and
+// responses are never logged.
+func (s *Service) explainOne(runCtx, stageCtx context.Context, in ExplanationInput, log *slog.Logger) *storedExplanation {
+	log = log.With("priority", in.Priority, "meter_id", in.MeterID, "provider", s.explainers.Settings.Provider)
+	start := time.Now()
+	exp, err := s.explainers.Primary.Explain(stageCtx, in)
+	if err == nil {
+		log.InfoContext(runCtx, "explanation generated", "source", exp.Source, "model", exp.Model, "duration_ms", time.Since(start).Milliseconds())
+		return &storedExplanation{Explanation: exp, GeneratedAt: time.Now().UTC()}
+	}
+	// A cancelled run is lifecycle control, not provider degradation. Do not
+	// call or log the fallback; explain returns the parent cancellation and
+	// the worker records the run according to its normal cancellation policy.
+	if runCtx.Err() != nil {
+		return nil
+	}
+	code := FallbackCode(err)
+	if s.explainers.Fallback != nil {
+		if fallback, ferr := s.explainers.Fallback.Explain(runCtx, in); ferr == nil {
+			log.WarnContext(runCtx, "explanation fallback used", "fallback_code", code, "duration_ms", time.Since(start).Milliseconds())
+			return &storedExplanation{Explanation: fallback, GeneratedAt: time.Now().UTC(), FallbackCode: &code}
+		}
+	}
+	log.WarnContext(runCtx, "explanation unavailable", "fallback_code", code, "duration_ms", time.Since(start).Milliseconds())
+	return nil
+}
+
+func inputOf(f analysis.Finding, e Evidence) ExplanationInput {
+	return ExplanationInput{
+		MeterID: f.MeterID, Type: string(f.Type), Severity: string(f.Severity), Confidence: f.Confidence,
+		Priority: f.Priority, RecommendedAction: string(f.RecommendedAction), Reason: f.Reason,
+		StartedAt: f.StartedAt, LastObservedAt: f.LastObservedAt, Evidence: e,
+	}
+}
+
+// persist writes the meter statuses and findings (with their explanations)
+// and completes the run in one transaction: either all of it becomes
+// visible, or none of it does.
+func (s *Service) persist(ctx context.Context, id int64, result analysis.Result, evidence []Evidence, explanations []*storedExplanation) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin result transaction: %w", err)
@@ -357,12 +464,12 @@ func (s *Service) persist(ctx context.Context, id int64, result analysis.Result)
 		}
 	}
 	high, confidenceSum := 0, 0.0
-	for _, f := range result.Findings {
-		evidence, err := json.Marshal(EvidenceOf(f))
+	for i, f := range result.Findings {
+		evidenceJSON, err := json.Marshal(evidence[i])
 		if err != nil {
 			return fmt.Errorf("encode evidence of finding %d: %w", f.Priority, err)
 		}
-		if err := q.InsertAnomaly(ctx, dbgen.InsertAnomalyParams{
+		params := dbgen.InsertAnomalyParams{
 			AnalysisRunID:           id,
 			MeterID:                 f.MeterID,
 			Priority:                int32(f.Priority),
@@ -376,8 +483,14 @@ func (s *Service) persist(ctx context.Context, id int64, result analysis.Result)
 			LastObservedAt:          f.LastObservedAt,
 			DurationSeconds:         int64(f.Duration / time.Second),
 			ConsumptionDeviationPct: percent(f.Consumption.DeviationPct),
-			Evidence:                evidence,
-		}); err != nil {
+			Evidence:                evidenceJSON,
+		}
+		if i < len(explanations) && explanations[i] != nil {
+			if err := setExplanation(&params, explanations[i]); err != nil {
+				return fmt.Errorf("encode explanation of finding %d: %w", f.Priority, err)
+			}
+		}
+		if err := q.InsertAnomaly(ctx, params); err != nil {
 			return fmt.Errorf("insert finding %d: %w", f.Priority, err)
 		}
 		if f.Severity == analysis.SeverityHigh {
@@ -400,6 +513,25 @@ func (s *Service) persist(ctx context.Context, id int64, result analysis.Result)
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit results: %w", err)
 	}
+	return nil
+}
+
+func setExplanation(p *dbgen.InsertAnomalyParams, e *storedExplanation) error {
+	text, err := json.Marshal(e.Text)
+	if err != nil {
+		return err
+	}
+	source := string(e.Source)
+	fallbackUsed := e.FallbackCode != nil
+	promptVersion := e.PromptVersion
+	generatedAt := e.GeneratedAt
+	p.Explanation = text
+	p.ExplanationSource = &source
+	p.ExplanationModel = e.Model
+	p.ExplanationPromptVersion = &promptVersion
+	p.ExplanationGeneratedAt = &generatedAt
+	p.ExplanationFallbackUsed = &fallbackUsed
+	p.ExplanationFallbackCode = e.FallbackCode
 	return nil
 }
 

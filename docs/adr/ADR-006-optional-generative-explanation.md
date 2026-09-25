@@ -27,3 +27,15 @@ The challenge rewards explanations and recommendations supported by evidence. Ge
 - **LLM as detector/classifier**: rejected (ADR-004).
 - **Hosted proprietary API as the only provider**: requires secrets and network access during evaluation.
 - **No generative layer**: acceptable functionally, but forgoes a clear, safely bounded demonstration of generative AI.
+
+## Implementation (Phase 05, 2026-09-25)
+
+The decision is implemented without change of scope; these points make it concrete:
+
+- **Boundary.** `analysisrun.ExplanationProvider` is declared by the run orchestration (its consumer) and implemented in `internal/explanation` by `Deterministic` and `Ollama`. Providers return four text fields plus source, model and prompt version. Nothing they return reaches the type, severity, confidence, priority, evidence or action code.
+- **Generation at analysis time, persisted.** Explanations are produced once per finding in the run's `GENERATING_EXPLANATIONS` stage (sequential) and stored with the findings and their provenance in the same transaction. Reading a finding never calls a provider; there is no regeneration endpoint.
+- **Failure isolation.** An unreachable, failing, slow, malformed or ungrounded generative reply is replaced by the deterministic text (`fallback_used`, sanitized code), and the run still completes. With Ollama the stage has its own time budget, so a slow model cannot turn a valid analysis into a timeout. Analytical, load and persistence failures still fail the run.
+- **Validation.** The output is strict JSON with unique keys, length limits and no markup. The model receives a qualitative projection with no numeric facts or non-supporting variables; model-authored numbers are rejected. JSON-schema enums and validation keep `why_it_matters`, the evidence narrative and action wording equal to controlled deterministic text. The model authors only the concise summary. Event types and roles are checked against the evidence. The prompt is versioned (`energy-explanation-v1`, `docs/ai/prompts/`).
+- **Local model (OD-16).** The product and every automated test run without a model. The optional live validation used `llama3.2:3b` (2.0 GB, Q4_K_M, 3.2B parameters): a small, stable general instruct model that fits the development GPU's 4 GiB and supports structured output. It is a local validation choice, not a requirement; any Ollama model can be configured with `OLLAMA_MODEL`.
+
+Details: `docs/ai/explainability.md`.

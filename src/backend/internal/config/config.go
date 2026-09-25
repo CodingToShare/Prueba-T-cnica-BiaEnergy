@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"bia-energy.local/backend/internal/auth"
 )
@@ -96,13 +97,42 @@ const (
 	EnvDemoPassword      = "DEMO_AUTH_PASSWORD"
 	EnvSessionSigningKey = "SESSION_SIGNING_KEY"
 	EnvSessionSecure     = "SESSION_COOKIE_SECURE"
+
+	EnvExplanationProvider = "EXPLANATION_PROVIDER"
+	EnvOllamaBaseURL       = "OLLAMA_BASE_URL"
+	EnvOllamaModel         = "OLLAMA_MODEL"
+	EnvOllamaTimeout       = "OLLAMA_TIMEOUT"
 )
 
+// Explanation providers (ADR-006).
+const (
+	ProviderDeterministic = "deterministic"
+	ProviderOllama        = "ollama"
+)
+
+// Explanation defaults. The Ollama URL is local; a remote service is only
+// used when configured explicitly.
+const (
+	defaultOllamaBaseURL = "http://127.0.0.1:11434"
+	defaultOllamaTimeout = 60 * time.Second
+	maxOllamaTimeout     = 5 * time.Minute
+)
+
+// ExplanationConfig selects how findings are explained. The deterministic
+// provider is the default and needs nothing else.
+type ExplanationConfig struct {
+	Provider      string
+	OllamaBaseURL string
+	OllamaModel   string
+	OllamaTimeout time.Duration
+}
+
 // APIConfig is the API's configuration: the shared settings plus the demo
-// authentication (OD-12).
+// authentication (OD-12) and the explanation provider.
 type APIConfig struct {
 	Config
-	Auth auth.Config
+	Auth        auth.Config
+	Explanation ExplanationConfig
 }
 
 // LoadAPI reads the shared configuration and the authentication settings.
@@ -132,8 +162,51 @@ func LoadAPI(getenv func(string) string) (APIConfig, error) {
 	if err := cfg.Auth.Validate(); err != nil {
 		problems = append(problems, fmt.Errorf("%s, %s and %s: %w", EnvDemoUsername, EnvDemoPassword, EnvSessionSigningKey, err))
 	}
+	var explanationProblems []error
+	cfg.Explanation, explanationProblems = loadExplanation(getenv)
+	problems = append(problems, explanationProblems...)
 	if len(problems) > 0 {
 		return APIConfig{}, errors.Join(problems...)
 	}
 	return cfg, nil
+}
+
+// loadExplanation reads the explanation settings. The Ollama settings are
+// validated only when that provider is selected.
+func loadExplanation(getenv func(string) string) (ExplanationConfig, []error) {
+	cfg := ExplanationConfig{
+		Provider:      strings.ToLower(strings.TrimSpace(getenv(EnvExplanationProvider))),
+		OllamaBaseURL: strings.TrimSpace(getenv(EnvOllamaBaseURL)),
+		OllamaModel:   strings.TrimSpace(getenv(EnvOllamaModel)),
+		OllamaTimeout: defaultOllamaTimeout,
+	}
+	if cfg.Provider == "" {
+		cfg.Provider = ProviderDeterministic
+	}
+	if cfg.OllamaBaseURL == "" {
+		cfg.OllamaBaseURL = defaultOllamaBaseURL
+	}
+	var problems []error
+	switch cfg.Provider {
+	case ProviderDeterministic:
+		return cfg, nil
+	case ProviderOllama:
+	default:
+		return cfg, []error{fmt.Errorf("%s: %q must be %s or %s", EnvExplanationProvider, cfg.Provider, ProviderDeterministic, ProviderOllama)}
+	}
+	if u, err := url.Parse(cfg.OllamaBaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		problems = append(problems, fmt.Errorf("%s must be an http(s) URL with a host and no credentials (for example %s)", EnvOllamaBaseURL, defaultOllamaBaseURL))
+	}
+	if cfg.OllamaModel == "" {
+		problems = append(problems, fmt.Errorf("%s is required when %s=%s (for example llama3.2:3b)", EnvOllamaModel, EnvExplanationProvider, ProviderOllama))
+	}
+	if raw := strings.TrimSpace(getenv(EnvOllamaTimeout)); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil || d <= 0 || d > maxOllamaTimeout {
+			problems = append(problems, fmt.Errorf("%s: %q must be a positive duration of at most %s (for example 60s)", EnvOllamaTimeout, raw, maxOllamaTimeout))
+		} else {
+			cfg.OllamaTimeout = d
+		}
+	}
+	return cfg, problems
 }

@@ -34,6 +34,20 @@ func (f analyzerFunc) Analyze(ctx context.Context, r []analysis.Reading, e []ana
 
 var quiet = slog.New(slog.NewTextHandler(io.Discard, nil))
 
+// stubExplainer stands in for the explanation providers (internal/explanation
+// imports this package, so its providers are exercised in their own
+// integration tests). It restates the engine reason.
+type stubExplainer struct{}
+
+func (stubExplainer) Explain(_ context.Context, in ExplanationInput) (Explanation, error) {
+	return Explanation{
+		Text:   ExplanationText{Summary: in.Reason, WhyItMatters: "stub", EvidenceNarrative: "stub", RecommendedActionText: in.RecommendedAction},
+		Source: SourceDeterministic, PromptVersion: "stub-v1",
+	}, nil
+}
+
+var stubExplainers = Explainers{Primary: stubExplainer{}, Settings: ExplanationSettings{Provider: "stub", PromptVersion: "stub-v1"}}
+
 func engine(t *testing.T) *analysis.Engine {
 	t.Helper()
 	e, err := analysis.New(analysis.DefaultConfig())
@@ -43,7 +57,7 @@ func engine(t *testing.T) *analysis.Engine {
 
 func newService(t *testing.T, pool *pgxpool.Pool, a Analyzer, opts Options) *Service {
 	t.Helper()
-	s, err := NewService(pool, a, analysis.EngineVersion, analysis.DefaultConfig(), quiet, opts)
+	s, err := NewService(pool, a, stubExplainers, analysis.EngineVersion, analysis.DefaultConfig(), quiet, opts)
 	require.NoError(t, err)
 	return s
 }

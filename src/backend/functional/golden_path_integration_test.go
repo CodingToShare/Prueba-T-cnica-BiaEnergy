@@ -194,6 +194,17 @@ func TestBlackBox_AuthenticatedAnalysisGoldenPath(t *testing.T) {
 	assert.Equal(t, "UNKNOWN", events[0].(map[string]any)["type"])
 	assert.Equal(t, "CONTEXT", events[0].(map[string]any)["role"])
 
+	// The explanation was generated during the run and is only read here.
+	explanation := top["explanation"].(map[string]any)
+	assert.Equal(t, "DETERMINISTIC", explanation["source"])
+	assert.Equal(t, false, explanation["fallback_used"])
+	assert.Nil(t, explanation["model"])
+	assert.Equal(t, "evidence-template-v1", explanation["prompt_version"])
+	assert.Regexp(t, `Z$`, explanation["generated_at"])
+	assert.Contains(t, explanation["summary"], "no recorded event explains the change")
+	assert.Contains(t, explanation["evidence_narrative"], "context only")
+	assert.NotEmpty(t, explanation["recommended_action_text"])
+
 	// Meters: computed status from the analysis, source status untouched.
 	meters := c.ok("/api/v1/meters")
 	statuses := map[string]any{}
@@ -249,6 +260,8 @@ func TestBlackBox_AuthenticatedAnalysisGoldenPath(t *testing.T) {
 
 	logs := output.String()
 	assert.Contains(t, logs, `"msg":"analysis completed"`)
+	assert.Contains(t, logs, `"msg":"explanation generated"`)
+	assert.NotContains(t, logs, events[0].(map[string]any)["description"].(string), "event descriptions are not logged")
 	assert.Contains(t, logs, `"analysis_id":`+id)
 	assertNoSecrets(t, logs)
 	for _, cookie := range sessionCookies {

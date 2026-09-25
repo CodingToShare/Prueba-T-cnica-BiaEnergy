@@ -35,6 +35,7 @@ This register keeps `TECHNICAL DECISION`, `ASSUMPTION`, and `OPEN DECISION` sepa
 | TD-27 | Same-origin API: Next.js rewrites `/api/v1/*` to the server-only `BACKEND_URL` (read when `next dev` / `next build` start). The browser never knows the backend origin, the session cookie stays first-party, and no CORS is needed. | Phase 04 |
 | TD-28 | Frontend API types are generated from `docs/api/openapi.yaml` with openapi-typescript (`pnpm generate:api` → `lib/api/schema.d.ts`, committed); the contract is not re-declared by hand. | Phase 04 |
 | TD-29 | Frontend unit/component tests (Vitest + Testing Library, jsdom) live beside the code. Playwright specs live in `src/frontend/e2e` (they resolve `@playwright/test` from the frontend package) and run through `e2e/run-e2e.mjs` against a disposable PostgreSQL 18.6 container, the compiled Go API and a production Next.js build; the `tests/e2e/` placeholder is removed (same reasoning as TD-20). | Phase 04, testing strategy |
+| TD-30 | Finding explanations are produced by `analysisrun.ExplanationProvider` implementations in `internal/explanation` (deterministic default and fallback; optional local Ollama via its HTTP API with the standard library) during the run's `GENERATING_EXPLANATIONS` stage, sequentially, and persisted per finding with provenance (migration 00003). Reads never call a provider. Configuration: `EXPLANATION_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`. | ADR-006 (implementation), `docs/ai/explainability.md` |
 
 ## Assumptions
 
@@ -69,7 +70,7 @@ Each is resolved in the named phase, recorded here with its rationale, and refle
 | OD-13 | UI language (Spanish vs English). | Challenge is in Spanish; API enum values remain English constants. | Resolved in Phase 04 |
 | OD-14 | Concurrent analysis runs and which run is "current". | For example, reject a new run while one is active; current = latest completed. | Resolved in Phase 03 (ADR-009) |
 | OD-15 | Exact dependency versions. | Pinned at introduction (TD-13). | Phase 01+ |
-| OD-16 | Whether the demo enables Ollama and which local model. | The product must be complete without it. | Phase 05 |
+| OD-16 | Whether the demo enables Ollama and which local model. | The product must be complete without it. | Resolved in Phase 05 |
 | OD-17 | Granularity of a finding: one per meter per run, or one per detected episode. | The challenge shows one row per meter. | Resolved in Phase 02 |
 | OD-18 | Whether readings flagged as data-quality problems are excluded from baselines and consumption KPIs. | Affects baseline robustness and KPI honesty. | Resolved in Phase 02 |
 | OD-19 | Entry point for reproducible dev/seed/test/demo-reset (e.g., Make targets vs cross-platform scripts vs Compose-only). | Must work on the evaluator's OS; `make` is not available by default on Windows. Phase 01 uses plain cross-platform `docker compose` and `go run` commands (README). The final single entry point is decided in Phase 06. | Phase 06 |
@@ -112,3 +113,12 @@ Calibrated on the supplied readings and events only. Details and evidence: `docs
 | Time display (UI part of TD-12/TD-24) | Source timestamps are formatted from their string parts, never through `Date`, so they show the meter's recorded wall clock in any browser time zone; system instants (analysis times) are shown in the browser's time zone | Source times have no offset; converting them would invent one |
 | Analysis polling | The run is polled every 750 ms only while `QUEUED`/`RUNNING`; polling stops on `COMPLETED`/`FAILED` (also when the first poll is already final); an active run is recovered from `dashboard.active_analysis` after a refresh; completion invalidates dashboard, meters and anomalies once | Truthful progress without background traffic |
 | Chart baseline | The chart overlays only what the engine stored: the finding's episode, its correlated events at their exact timestamps and the baseline of the flagged readings (evidence signals). No hourly baseline series is computed in the browser; a full baseline series would need a backend endpoint (deferred) | The browser must not duplicate analytics (TD-05) |
+
+## Decisions Resolved In Phase 05 (2026-09-25)
+
+| ID | Resolution | Rationale |
+| --- | --- | --- |
+| OD-16 | The product, every automated test and the default demo use the deterministic explanation provider; no model is required. Ollama is an optional, configuration-enabled local mode. The recorded live validation used `llama3.2:3b` (2.0 GB, Q4_K_M), small enough for the development GPU (4 GiB) | Reproducible evaluation without downloads or keys; a small local model demonstrates grounded generation within the hardware |
+| Explanation failure semantics | A provider failure (unreachable, HTTP error, timeout, malformed or ungrounded output) stores the deterministic text with `fallback_used` and a sanitized code; the run COMPLETES. With Ollama the explanation stage has a 3-minute budget on top of the run timeout. Analytics, load and persistence failures still fail the run | Wording must never invalidate a valid analysis; a slow model must not consume the analysis timeout |
+| Explanation persistence | Generated once per finding during the run and stored with the finding; `GET /anomalies/{id}` only reads it; no regeneration endpoint | Stable demo, low latency, historical provenance |
+| Provenance exposure | The API exposes `source`, `model` (generated text only), `prompt_version`, `generated_at` and `fallback_used`; the fallback code stays in the database and logs | Enough for evaluators without exposing provider internals |

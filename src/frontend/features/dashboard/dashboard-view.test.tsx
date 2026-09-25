@@ -162,7 +162,7 @@ describe("DashboardView", () => {
     await user.click(await screen.findByRole("button", { name: "Run analysis again" }));
     const progress = await screen.findByRole("progressbar", { name: "Analysis progress" });
     await waitFor(() => expect(progress).toHaveAttribute("aria-valuenow", "45"));
-    expect(screen.getByText("Step 3 of 5")).toBeInTheDocument();
+    expect(screen.getByText("Step 3 of 6")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyzing…" })).toBeDisabled();
     // Previous results stay visible while the new run is active.
     expect(kpi("AI anomalies").getByText("3")).toBeInTheDocument();
@@ -189,7 +189,7 @@ describe("DashboardView", () => {
     });
     renderWithClient(<DashboardView />);
 
-    expect(await screen.findByText("Step 2 of 5")).toBeInTheDocument();
+    expect(await screen.findByText("Step 2 of 6")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Analyzing…" })).toBeDisabled();
     expect(fake.count("POST", "/api/v1/ai/analyze")).toBe(0);
   });

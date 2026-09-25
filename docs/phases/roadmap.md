@@ -8,8 +8,8 @@ Sequential, phase-gated delivery for a three-day challenge. Procedures are in th
 | 01 | Runtime Foundation + PostgreSQL + Dataset Ingestion | Complete | Go runtime, PostgreSQL schema, migrations, and verified idempotent dataset ingestion |
 | 02 | Analytics / Anomaly Engine | Complete (independent audit; non-blocking notes) | Deterministic, evidence-producing engine passing the four acceptance scenarios |
 | 03 | Backend API + Analysis Orchestration | Complete (independent audit; non-blocking notes) | Versioned, documented API with persisted analysis runs and progress |
-| 04 | Frontend Product Experience | Complete (independent audit; uncommitted) | Responsive SaaS-quality product UI matching the canonical visual language |
-| 05 | AI Investigation / Explainability Integration | Planned / Not Started | Grounded deterministic + optional generative explanation and investigation experience |
+| 04 | Frontend Product Experience | Complete (independent audit; checkpoint `699da3f`) | Responsive SaaS-quality product UI matching the canonical visual language |
+| 05 | AI Investigation / Explainability Integration | Complete (independent audit; uncommitted) | Grounded deterministic + optional generative explanation and investigation experience |
 | 06 | Quality + Observability + Delivery + Demo | Planned / Not Started | Complete regression, observability, reproducible delivery, CI, and polished demo |
 
 ## Dependencies
@@ -46,7 +46,7 @@ Run everything that exists and applies at that point. Concrete commands are reco
 | Phase 03 | All of the above; analytics unit tests; analytics acceptance scenarios; existing integration tests. Commands: the Phase 02 list plus `go -C src/backend test ./internal/analysis/` (included in both suites; no Docker) |
 | Phase 04 | Backend build and tests; API integration tests; OpenAPI/contract checks; frontend bootstrap/build checks once available. Commands: `go -C src/backend build ./...`, `go -C src/backend vet -tags=integration ./...`, `go -C src/backend test ./...` (includes the OpenAPI checks), `go -C src/backend test -tags=integration ./...` (API, orchestration and black-box golden path; Docker required), and sqlc drift `docker run --rm -v "<repo>:/src" -w /src sqlc/sqlc:1.31.1 diff` |
 | Phase 05 | Complete backend regression; frontend unit/component regression; Playwright critical smoke flow. Commands: the Phase 04 backend commands above, then from `src/frontend`: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm test:e2e` (real stack; Docker and Go required) |
-| Phase 06 | Complete existing automated suite; Docker/runtime baseline; known acceptance flow |
+| Phase 06 | Complete existing automated suite; Docker/runtime baseline; known acceptance flow. Commands: the Phase 05 list above (explanation providers, fallback and the Ollama-unavailable path are covered without any model); the live Ollama smoke is optional and manual |
 
 ## Phase Exit Gate
 

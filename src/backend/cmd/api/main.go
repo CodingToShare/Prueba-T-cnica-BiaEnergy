@@ -22,12 +22,34 @@ import (
 	"bia-energy.local/backend/internal/auth"
 	"bia-energy.local/backend/internal/config"
 	"bia-energy.local/backend/internal/dashboard"
+	"bia-energy.local/backend/internal/explanation"
 	"bia-energy.local/backend/internal/httpapi"
 	"bia-energy.local/backend/internal/meter"
 	"bia-energy.local/backend/internal/platform/postgres"
 )
 
 const shutdownTimeout = 10 * time.Second
+
+// ollamaStageBudget is the time the explanation stage may spend on a local
+// model, on top of the run timeout. Findings still unexplained when it runs
+// out get the deterministic text; the run itself is not failed.
+const ollamaStageBudget = 3 * time.Minute
+
+// explanationSetup selects the explanation providers (ADR-006): the
+// deterministic provider alone, or Ollama with the deterministic provider as
+// fallback.
+func explanationSetup(cfg config.ExplanationConfig) (analysisrun.Explainers, analysisrun.Options, error) {
+	deterministic := explanation.Deterministic{}
+	if cfg.Provider != config.ProviderOllama {
+		return analysisrun.Explainers{Primary: deterministic, Settings: explanation.DeterministicSettings()}, analysisrun.Options{}, nil
+	}
+	ollama, err := explanation.NewOllama(explanation.OllamaConfig{BaseURL: cfg.OllamaBaseURL, Model: cfg.OllamaModel, Timeout: cfg.OllamaTimeout})
+	if err != nil {
+		return analysisrun.Explainers{}, analysisrun.Options{}, err
+	}
+	return analysisrun.Explainers{Primary: ollama, Fallback: deterministic, Settings: ollama.Settings()},
+		analysisrun.Options{ExplanationTimeout: ollamaStageBudget}, nil
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -65,7 +87,12 @@ func run(ctx context.Context, cfg config.APIConfig, logger *slog.Logger, onListe
 	if err != nil {
 		return err
 	}
-	runs, err := analysisrun.NewService(pool, engine, analysis.EngineVersion, engine.Config(), logger, analysisrun.Options{})
+	explainers, opts, err := explanationSetup(cfg.Explanation)
+	if err != nil {
+		return err
+	}
+	logger.Info("explanation provider configured", "provider", explainers.Settings.Provider, "model", explainers.Settings.Model, "prompt_version", explainers.Settings.PromptVersion)
+	runs, err := analysisrun.NewService(pool, engine, explainers, analysis.EngineVersion, engine.Config(), logger, opts)
 	if err != nil {
 		return err
 	}

@@ -191,6 +191,7 @@ func TestOpenAPI_SchemasListExactlyTheDTOFields(t *testing.T) {
 		"AnomalySummary":   anomalySummaryDTO{},
 		"AnomalyList":      anomalyListDTO{},
 		"AnomalyDetail":    anomalyDetailDTO{},
+		"Explanation":      explanationDTO{},
 		"Evidence":         analysisrun.Evidence{},
 		"AnalysisRun":      runDTO{},
 		"AnalyzeResponse":  analyzeDTO{},
