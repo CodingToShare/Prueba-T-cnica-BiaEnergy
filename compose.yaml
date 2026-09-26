@@ -1,7 +1,20 @@
-# Local development runtime. Phase 01 provides PostgreSQL only; the Go
-# commands run on the host. Credentials below are local-only defaults and can
-# be overridden through a .env file (see .env.example).
+# Bia Energy — local demo stack and development database.
+#
+# Full demo (PostgreSQL → migrate → seed → API → web), from the repository root:
+#   docker compose up --build -d --wait
+#   open http://localhost:3000   (local demo login: demo / bia-demo-2026)
+# Reset to a fresh, freshly seeded database:
+#   docker compose down -v --remove-orphans   then the command above again
+# Database only, for running the Go commands and Next.js on the host:
+#   docker compose up -d --wait postgres
+#
+# Every value below is a LOCAL-DEMO default, overridable through the
+# environment or a .env file (see .env.example). None is a production secret.
 name: bia-energy
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgres://${POSTGRES_USER:-bia}:${POSTGRES_PASSWORD:-bia_local_dev}@postgres:5432/${POSTGRES_DB:-bia_energy}?sslmode=disable
+  LOG_LEVEL: ${LOG_LEVEL:-info}
 
 services:
   postgres:
@@ -11,6 +24,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-bia}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bia_local_dev}
     ports:
+      # Host access for the manual developer workflow (Go commands on the host).
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18 images keep PGDATA under /var/lib/postgresql/18/docker.
@@ -21,6 +35,88 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
+
+  # One-shot: apply the schema migrations; the API never migrates by itself.
+  migrate:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    image: bia-energy-backend:local
+    command: ["/app/bin/migrate", "up"]
+    environment: *backend-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  # One-shot: import the supplied challenge dataset (idempotent).
+  seed:
+    image: bia-energy-backend:local
+    pull_policy: never # built by the migrate service
+    command: ["/app/bin/seed"]
+    environment: *backend-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    image: bia-energy-backend:local
+    pull_policy: never # built by the migrate service
+    command: ["/app/bin/api"]
+    environment:
+      <<: *backend-env
+      HTTP_ADDR: ":8080"
+      DEMO_AUTH_USERNAME: ${DEMO_AUTH_USERNAME:-demo}
+      DEMO_AUTH_PASSWORD: ${DEMO_AUTH_PASSWORD:-bia-demo-2026}
+      SESSION_SIGNING_KEY: ${SESSION_SIGNING_KEY:-local-demo-only-signing-key-not-for-production}
+      # Plain HTTP on localhost; a real deployment serves HTTPS and keeps this true.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      # deterministic (default): no model needed. Optional host Ollama:
+      # EXPLANATION_PROVIDER=ollama OLLAMA_MODEL=llama3.2:3b (see README).
+      EXPLANATION_PROVIDER: ${EXPLANATION_PROVIDER:-deterministic}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-60s}
+    extra_hosts:
+      # Lets the optional Ollama mode reach a host service on Linux as well.
+      - "host.docker.internal:host-gateway"
+    ports:
+      # Operational access (/healthz, /readyz, /metrics) from this machine only.
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/bin/healthcheck", "http://127.0.0.1:8080/readyz"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 5s
+    stop_grace_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: src/frontend
+      args:
+        # Build-time: the Next.js rewrite target inside the Compose network.
+        BACKEND_URL: http://api:8080
+    image: bia-energy-web:local
+    # A minimal init as PID 1 forwards stop signals to Node and reaps children.
+    init: true
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
 
 volumes:
   postgres-data:

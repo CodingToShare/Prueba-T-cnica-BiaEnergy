@@ -1,6 +1,6 @@
 # Bia Energy — Frontend
 
-Next.js (App Router) product UI for the Bia Energy Management Platform. Setup, commands and tests are in the [repository README](../../README.md#local-development); the visual contract is [docs/design/design-system.md](../../docs/design/design-system.md).
+Next.js (App Router) product UI for the Bia Energy Management Platform. Setup, commands and tests are in the [repository README](../../README.md#manual-development); the visual contract is [docs/design/design-system.md](../../docs/design/design-system.md).
 
 ```text
 app/          routes: /login and the authenticated (app) group — dashboard, meters, anomalies

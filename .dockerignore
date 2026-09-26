@@ -1,0 +1,18 @@
+# Build context of the backend image (repository root). Only src/backend,
+# database/migrations and data/input are copied; everything else stays out.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+tmp/
+src/backend/tmp/
+src/frontend/
+docs/
+.agents/
+.github/
+**/node_modules
+**/test-results
+**/coverage
+**/*.exe
+**/*.test
+**/*.out

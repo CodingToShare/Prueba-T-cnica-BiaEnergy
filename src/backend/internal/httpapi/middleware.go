@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"bia-energy.local/backend/internal/auth"
+	"bia-energy.local/backend/internal/platform/metrics"
 )
 
 // RequestIDHeader carries the request ID in every response.
@@ -70,9 +71,10 @@ func addLogFields(ctx context.Context, kv ...any) {
 	}
 }
 
-// requestLogger writes one structured line per request: never bodies,
-// cookies, query strings or credentials.
-func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+// requestLogger writes one structured line per request (never bodies,
+// cookies, query strings or credentials) and records the request metrics
+// with the route template, never the raw path.
+func requestLogger(logger *slog.Logger, m *metrics.Metrics) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -96,7 +98,27 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			attrs = append(attrs, fields.attrs...)
 			fields.mu.Unlock()
 			logger.InfoContext(r.Context(), "http request", attrs...)
+			m.ObserveHTTP(methodLabel(r.Method), routeLabel(route), ww.Status(), time.Since(start))
 		})
+	}
+}
+
+// routeLabel keeps metric cardinality bounded: unmatched paths share one label.
+func routeLabel(route string) string {
+	if route == "" {
+		return "unmatched"
+	}
+	return route
+}
+
+// methodLabel maps unknown request methods to one label.
+func methodLabel(method string) string {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch,
+		http.MethodDelete, http.MethodOptions:
+		return method
+	default:
+		return "OTHER"
 	}
 }
 

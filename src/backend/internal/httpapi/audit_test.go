@@ -55,7 +55,7 @@ func TestRecoverer_AuditPanicValueIsNotLogged(t *testing.T) {
 
 func TestRequestID_AuditConcurrentUniquenessAndLogCorrelation(t *testing.T) {
 	var logs bytes.Buffer // slog serializes writes; read only after all requests finish
-	h := withRequestID(requestLogger(slog.New(slog.NewJSONHandler(&logs, nil)))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeError(w, r, errNotFound) })))
+	h := withRequestID(requestLogger(slog.New(slog.NewJSONHandler(&logs, nil)), nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { writeError(w, r, errNotFound) })))
 	const count = 64
 	responses := make([]*httptest.ResponseRecorder, count)
 	var wg sync.WaitGroup

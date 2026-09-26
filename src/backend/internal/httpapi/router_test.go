@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"bia-energy.local/backend/internal/auth"
+	"bia-energy.local/backend/internal/platform/metrics"
 )
 
 // Test-only credentials.
@@ -42,6 +43,7 @@ type fixture struct {
 	auth    *auth.Manager
 	logs    *bytes.Buffer
 	now     *time.Time
+	metrics *metrics.Metrics
 }
 
 // newFixture builds the real router with no product services: every test
@@ -53,10 +55,12 @@ func newFixture(t *testing.T, db pinger) *fixture {
 	var err error
 	f.auth, err = auth.NewManager(testAuth, func() time.Time { return *f.now })
 	require.NoError(t, err)
+	f.metrics = metrics.New()
 	f.handler = NewRouter(Deps{
-		Logger: slog.New(slog.NewJSONHandler(f.logs, nil)),
-		DB:     db,
-		Auth:   f.auth,
+		Logger:  slog.New(slog.NewJSONHandler(f.logs, nil)),
+		DB:      db,
+		Auth:    f.auth,
+		Metrics: f.metrics,
 	})
 	return f
 }

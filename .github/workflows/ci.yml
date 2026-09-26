@@ -1,0 +1,156 @@
+# Continuous integration: the same commands the phases validate locally.
+# No secrets and no language model are needed (deterministic explanations;
+# the optional Ollama adapter is covered by tests against a fake server).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NODE_VERSION: "24.21.0"
+  # Pinned sqlc image (TD-22): generated code must match the queries.
+  SQLC_IMAGE: sqlc/sqlc:1.31.1@sha256:70f53171d27b2424e9358869975455a6e955a5aa8e58a998a270a6e34e525537
+
+jobs:
+  backend:
+    name: Backend (static checks, unit tests, sqlc drift)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/backend/go.mod
+          cache-dependency-path: src/backend/go.sum
+      - run: go mod verify
+      - run: go mod tidy -diff
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go vet -tags=integration ./...
+      - run: go build ./...
+      - run: go test -count=1 ./...
+      - name: sqlc generate, vet and drift check
+        working-directory: .
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src "$SQLC_IMAGE" generate
+          docker run --rm -v "$PWD:/src" -w /src "$SQLC_IMAGE" vet
+          git diff --exit-code -- src/backend/internal/platform/postgres/dbgen
+
+  frontend:
+    name: Frontend (types drift, lint, typecheck, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: src/frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: src/frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: OpenAPI types drift check
+        run: |
+          pnpm generate:api
+          git diff --exit-code -- lib/api/schema.d.ts
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  integration:
+    name: Backend integration (PostgreSQL 18.6 via Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/backend/go.mod
+          cache-dependency-path: src/backend/go.sum
+      - run: go -C src/backend test -count=1 -tags=integration ./...
+
+  e2e:
+    name: Real-stack Playwright (golden path, responsive, accessibility, fallback)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: src/backend/go.mod
+          cache-dependency-path: src/backend/go.sum
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: src/frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: src/frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: src/frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: src/frontend
+      - run: pnpm test:e2e
+        working-directory: src/frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results
+          path: src/frontend/test-results/
+          retention-days: 7
+
+  delivery:
+    name: Compose delivery (images, one-command start, containerized golden path)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: src/frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: src/frontend/pnpm-lock.yaml
+      - name: Start the demo stack (reviewer command)
+        run: docker compose up --build -d --wait
+      - run: pnpm install --frozen-lockfile
+        working-directory: src/frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: src/frontend
+      - name: Golden path and accessibility against the containers
+        working-directory: src/frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:3000
+          E2E_USERNAME: demo
+          E2E_PASSWORD: bia-demo-2026
+        run: pnpm exec playwright test --project desktop --project a11y
+      - name: Metrics are exposed
+        run: curl -fsS http://127.0.0.1:8080/metrics | grep -q '^bia_analysis_runs_total{status="completed"} 1'
+      - name: Stack logs
+        if: failure()
+        run: docker compose logs --no-color
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: delivery-playwright-results
+          path: src/frontend/test-results/
+          retention-days: 7
+      - if: always()
+        run: docker compose down -v --remove-orphans

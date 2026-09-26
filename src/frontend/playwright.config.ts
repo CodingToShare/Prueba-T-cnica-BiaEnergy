@@ -32,6 +32,12 @@ export default defineConfig({
     { name: "desktop", testMatch: /golden-path\.spec\.ts/, use: { viewport: { width: 1440, height: 900 } } },
     { name: "audit", testMatch: /audit\.spec\.ts/, dependencies: ["desktop"], use: { viewport: { width: 1440, height: 900 } } },
     {
+      name: "a11y",
+      testMatch: /accessibility\.spec\.ts/,
+      dependencies: ["desktop"],
+      use: { viewport: { width: 1440, height: 900 } },
+    },
+    {
       name: "mobile",
       testMatch: /responsive\.spec\.ts/,
       dependencies: ["desktop"],

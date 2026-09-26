@@ -128,3 +128,22 @@ Phase 03 added three kinds of tests:
 - **Black-box golden path**: login → analyze → poll → anomalies → meters → dashboard → logout, over compiled processes, real HTTP and cookies.
 
 Results are recorded in the Phase 03 document.
+
+## Final Test Matrix (Phase 06)
+
+Every row was executed on the final Phase 06 tree; commands and counts are in [phase-06-quality-delivery.md](../phases/phase-06-quality-delivery.md). No row needs a language model.
+
+| Area | Level | What | Command / where |
+| --- | --- | --- | --- |
+| Backend | Unit | Engine math and decisions, analytics acceptance on the supplied CSVs, API contract (OpenAPI ↔ router/DTOs), auth, config, explanation providers (deterministic, Ollama adapter against a fake server, grounding, prompt injection), metrics families and cardinality | `go -C src/backend test ./...` |
+| Backend | Integration (PostgreSQL 18.6, Testcontainers) | Migrations up/down, ingestion, run lifecycle and recovery, persistence, every endpoint, explanation persistence and fallback, run/explanation metrics | `go -C src/backend test -tags=integration ./...` |
+| Backend | Functional black-box | Compiled `migrate`/`seed`/`api` as separate processes: authenticated golden path, Ollama-unavailable fallback | same command (`functional/`) |
+| Backend | Race | Both suites with `-race` on Linux | `golang:1.27.1` container (procedure in the Phase 02 and Phase 06 records) |
+| Frontend | Static | ESLint, TypeScript, production build | `pnpm lint`, `pnpm typecheck`, `pnpm build` |
+| Frontend | Unit / component | Formatters, time handling, API client, analysis state, views and explanation presentation | `pnpm test` |
+| System | Real-stack E2E | Golden path, session/filter/chart audits, mobile and tablet journeys, axe scan of 6 pages (+2 at 390 px), real API outage and recovery, Ollama-unavailable fallback | `pnpm test:e2e` |
+| System | Containerized delivery | One-command Compose start, golden path and axe against the containers, `/metrics`, reset | README quick start + containerized smoke; CI `delivery` job |
+| AI | Analytics acceptance | M-109, M-112, M-104, M-106 classifications, severities, confidences and order | backend unit + integration suites |
+| AI | Optional live model | `llama3.2:3b` via Ollama (host and from the API container) | manual, recorded in the Phase 05 and Phase 06 records |
+
+Generated code is checked for drift (sqlc `generate`/`vet` + `git diff`, OpenAPI types regeneration + `git diff`) locally and in CI.

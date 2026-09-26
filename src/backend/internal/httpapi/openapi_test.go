@@ -34,7 +34,7 @@ func loadSpec(t *testing.T) map[string]any {
 	return spec
 }
 
-var publicOperations = []string{"GET /healthz", "GET /readyz", "POST /api/v1/auth/login", "POST /api/v1/auth/logout"}
+var publicOperations = []string{"GET /healthz", "GET /readyz", "GET /metrics", "POST /api/v1/auth/login", "POST /api/v1/auth/logout"}
 
 func specOperations(spec map[string]any) map[string]map[string]any {
 	ops := map[string]map[string]any{}

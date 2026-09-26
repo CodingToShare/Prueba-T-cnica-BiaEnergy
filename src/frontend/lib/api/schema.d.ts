@@ -38,6 +38,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Prometheus metrics
+         * @description Operational metrics in the Prometheus text exposition format: HTTP
+         *     requests by method, route template and status class; analysis runs,
+         *     durations, findings and active runs; explanation outcomes, durations
+         *     and fallbacks by sanitized code; Go runtime and process metrics.
+         *     Labels never contain identifiers. Public like /healthz and /readyz
+         *     for local operation; a real deployment restricts it at the network
+         *     edge.
+         */
+        get: operations["getMetrics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -691,6 +717,26 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    getMetrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current metrics. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
                 };
             };
         };

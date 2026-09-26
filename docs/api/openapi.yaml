@@ -76,6 +76,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
               example: { status: not_ready, checks: { postgres: unavailable } }
+  /metrics:
+    get:
+      tags: [operations]
+      operationId: getMetrics
+      summary: Prometheus metrics
+      description: |
+        Operational metrics in the Prometheus text exposition format: HTTP
+        requests by method, route template and status class; analysis runs,
+        durations, findings and active runs; explanation outcomes, durations
+        and fallbacks by sanitized code; Go runtime and process metrics.
+        Labels never contain identifiers. Public like /healthz and /readyz
+        for local operation; a real deployment restricts it at the network
+        edge.
+      security: []
+      responses:
+        "200":
+          description: Current metrics.
+          content:
+            text/plain:
+              schema: { type: string }
   /api/v1/auth/login:
     post:
       tags: [auth]

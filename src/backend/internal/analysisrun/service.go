@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"bia-energy.local/backend/internal/analysis"
+	"bia-energy.local/backend/internal/platform/metrics"
 	"bia-energy.local/backend/internal/platform/postgres"
 	"bia-energy.local/backend/internal/platform/postgres/dbgen"
 )
@@ -39,6 +40,8 @@ type Options struct {
 	// a dedicated budget so that a slow model degrades to the fallback
 	// instead of timing out the whole run.
 	ExplanationTimeout time.Duration
+	// Metrics records run and explanation metrics; nil records nothing.
+	Metrics *metrics.Metrics
 }
 
 // Service creates, reads and executes analysis runs. PostgreSQL is the
@@ -56,6 +59,7 @@ type Service struct {
 	logger                   *slog.Logger
 	runTimeout               time.Duration
 	explanationTimeout       time.Duration
+	metrics                  *metrics.Metrics
 	pollInterval             time.Duration
 	wake                     chan struct{}
 }
@@ -93,6 +97,7 @@ func NewService(pool *pgxpool.Pool, analyzer Analyzer, explainers Explainers, en
 		logger:                   logger,
 		runTimeout:               opts.RunTimeout,
 		explanationTimeout:       max(opts.ExplanationTimeout, 0),
+		metrics:                  opts.Metrics,
 		pollInterval:             opts.PollInterval,
 		wake:                     make(chan struct{}, 1),
 	}, nil
@@ -231,6 +236,7 @@ func (s *Service) execute(ctx context.Context, id int64) {
 	start := time.Now()
 	log := s.logger.With("analysis_id", id)
 	log.InfoContext(ctx, "analysis started", "stage", StageLoadingData)
+	s.metrics.RunStarted()
 
 	runCtx, cancel := context.WithTimeout(ctx, s.runTimeout+s.explanationTimeout)
 	defer cancel()
@@ -240,11 +246,16 @@ func (s *Service) execute(ctx context.Context, id int64) {
 		code := failureCode(ctx, runCtx, err)
 		if ferr := s.recordFailure(ctx, id, code); ferr != nil {
 			log.ErrorContext(ctx, "recording the analysis failure failed", "error", ferr)
+			s.metrics.RunStopped()
+		} else {
+			s.metrics.RunFinished("failed", time.Since(start), 0)
 		}
 		log.ErrorContext(ctx, "analysis failed", "error_code", code, "duration_ms", elapsed, "error", err)
 		return
 	}
+	// Counted only after the completion transaction committed (in perform).
 	log.InfoContext(ctx, "analysis completed", "findings", findings, "duration_ms", elapsed)
+	s.metrics.RunFinished("completed", time.Since(start), findings)
 }
 
 // failureCode classifies an error: shutdown and the run timeout take
@@ -413,9 +424,11 @@ func (s *Service) explain(ctx context.Context, findings []analysis.Finding, evid
 func (s *Service) explainOne(runCtx, stageCtx context.Context, in ExplanationInput, log *slog.Logger) *storedExplanation {
 	log = log.With("priority", in.Priority, "meter_id", in.MeterID, "provider", s.explainers.Settings.Provider)
 	start := time.Now()
+	provider := s.explainers.Settings.Provider
 	exp, err := s.explainers.Primary.Explain(stageCtx, in)
 	if err == nil {
 		log.InfoContext(runCtx, "explanation generated", "source", exp.Source, "model", exp.Model, "duration_ms", time.Since(start).Milliseconds())
+		s.metrics.Explanation(provider, metrics.OutcomeGenerated, "", time.Since(start))
 		return &storedExplanation{Explanation: exp, GeneratedAt: time.Now().UTC()}
 	}
 	// A cancelled run is lifecycle control, not provider degradation. Do not
@@ -428,10 +441,12 @@ func (s *Service) explainOne(runCtx, stageCtx context.Context, in ExplanationInp
 	if s.explainers.Fallback != nil {
 		if fallback, ferr := s.explainers.Fallback.Explain(runCtx, in); ferr == nil {
 			log.WarnContext(runCtx, "explanation fallback used", "fallback_code", code, "duration_ms", time.Since(start).Milliseconds())
+			s.metrics.Explanation(provider, metrics.OutcomeFallback, code, time.Since(start))
 			return &storedExplanation{Explanation: fallback, GeneratedAt: time.Now().UTC(), FallbackCode: &code}
 		}
 	}
 	log.WarnContext(runCtx, "explanation unavailable", "fallback_code", code, "duration_ms", time.Since(start).Milliseconds())
+	s.metrics.Explanation(provider, metrics.OutcomeUnavailable, code, time.Since(start))
 	return nil
 }
 

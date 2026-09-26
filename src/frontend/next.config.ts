@@ -12,6 +12,9 @@ const backendUrl = (process.env.BACKEND_URL ?? "http://localhost:8080").replace(
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // The container image (Dockerfile) builds the self-contained server with
+  // NEXT_OUTPUT=standalone; local builds keep the default `next start` output.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   async rewrites() {
     return [{ source: "/api/v1/:path*", destination: `${backendUrl}/api/v1/:path*` }];
   },

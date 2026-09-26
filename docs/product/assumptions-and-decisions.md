@@ -36,6 +36,8 @@ This register keeps `TECHNICAL DECISION`, `ASSUMPTION`, and `OPEN DECISION` sepa
 | TD-28 | Frontend API types are generated from `docs/api/openapi.yaml` with openapi-typescript (`pnpm generate:api` → `lib/api/schema.d.ts`, committed); the contract is not re-declared by hand. | Phase 04 |
 | TD-29 | Frontend unit/component tests (Vitest + Testing Library, jsdom) live beside the code. Playwright specs live in `src/frontend/e2e` (they resolve `@playwright/test` from the frontend package) and run through `e2e/run-e2e.mjs` against a disposable PostgreSQL 18.6 container, the compiled Go API and a production Next.js build; the `tests/e2e/` placeholder is removed (same reasoning as TD-20). | Phase 04, testing strategy |
 | TD-30 | Finding explanations are produced by `analysisrun.ExplanationProvider` implementations in `internal/explanation` (deterministic default and fallback; optional local Ollama via its HTTP API with the standard library) during the run's `GENERATING_EXPLANATIONS` stage, sequentially, and persisted per finding with provenance (migration 00003). Reads never call a provider. Configuration: `EXPLANATION_PROVIDER`, `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT`. | ADR-006 (implementation), `docs/ai/explainability.md` |
+| TD-31 | Metrics use the Prometheus Go client (`client_golang` 1.24.1) with an application-owned registry (`internal/platform/metrics`), never the global one. Labels are bounded enumerations only (route templates, method, status class, run status, provider, outcome, fallback code). `GET /metrics` is public like `/healthz` and `/readyz` and documented in the OpenAPI operations section. | Architecture §9, Phase 06 |
+| TD-32 | Delivery is one `compose.yaml`: PostgreSQL 18.6, one-shot `migrate` and `seed`, the API and the web frontend, ordered by health and completion conditions. One distroless static backend image serves `api`, `migrate`, `seed` and `healthcheck`; the web image is a Next.js standalone build whose `BACKEND_URL` is a build argument. CI is one GitHub Actions workflow (backend, frontend, integration, e2e, delivery) with pinned toolchains and no secrets. | Architecture §13, Phase 06 |
 
 ## Assumptions
 
@@ -73,7 +75,7 @@ Each is resolved in the named phase, recorded here with its rationale, and refle
 | OD-16 | Whether the demo enables Ollama and which local model. | The product must be complete without it. | Resolved in Phase 05 |
 | OD-17 | Granularity of a finding: one per meter per run, or one per detected episode. | The challenge shows one row per meter. | Resolved in Phase 02 |
 | OD-18 | Whether readings flagged as data-quality problems are excluded from baselines and consumption KPIs. | Affects baseline robustness and KPI honesty. | Resolved in Phase 02 |
-| OD-19 | Entry point for reproducible dev/seed/test/demo-reset (e.g., Make targets vs cross-platform scripts vs Compose-only). | Must work on the evaluator's OS; `make` is not available by default on Windows. Phase 01 uses plain cross-platform `docker compose` and `go run` commands (README). The final single entry point is decided in Phase 06. | Phase 06 |
+| OD-19 | Entry point for reproducible dev/seed/test/demo-reset (e.g., Make targets vs cross-platform scripts vs Compose-only). | Must work on the evaluator's OS; `make` is not available by default on Windows. Phase 01 uses plain cross-platform `docker compose` and `go run` commands (README). The final single entry point is decided in Phase 06. | Resolved in Phase 06 |
 
 ## Decisions Resolved In Phase 02 (2026-09-24)
 
@@ -122,3 +124,13 @@ Calibrated on the supplied readings and events only. Details and evidence: `docs
 | Explanation failure semantics | A provider failure (unreachable, HTTP error, timeout, malformed or ungrounded output) stores the deterministic text with `fallback_used` and a sanitized code; the run COMPLETES. With Ollama the explanation stage has a 3-minute budget on top of the run timeout. Analytics, load and persistence failures still fail the run | Wording must never invalidate a valid analysis; a slow model must not consume the analysis timeout |
 | Explanation persistence | Generated once per finding during the run and stored with the finding; `GET /anomalies/{id}` only reads it; no regeneration endpoint | Stable demo, low latency, historical provenance |
 | Provenance exposure | The API exposes `source`, `model` (generated text only), `prompt_version`, `generated_at` and `fallback_used`; the fallback code stays in the database and logs | Enough for evaluators without exposing provider internals |
+
+## Decisions Resolved In Phase 06 (2026-09-25)
+
+| ID | Resolution | Rationale |
+| --- | --- | --- |
+| OD-19 | Compose only. `docker compose up --build -d --wait` starts the demo, and `docker compose down -v --remove-orphans` followed by the same command resets it. There are no wrapper scripts or Make targets | Identical in PowerShell, Bash and Linux shells; nothing extra to install; `--wait` already blocks until every service is healthy |
+| Demo defaults | Compose provides clearly named local-demo defaults (login `demo` / `bia-demo-2026`, a signing key labelled "local-demo-only…not-for-production", PostgreSQL `bia_local_dev`), overridable by environment or `.env` | A reviewer can run the demo without inventing secrets; these values are not a credential-management story |
+| Seeding in the demo stack | The Compose demo always runs `seed` after `migrate`; the API never migrates or seeds by itself | Predictable evaluator startup with explicit, separately failing steps |
+| Explanation mode in delivery | Deterministic by default; Ollama is opt-in through environment variables and runs on the host (`host.docker.internal`), never as a Compose service | No 2 GB download or GPU needed; reproducible CI |
+| Shutdown hardening | Every pool connection attempt is bounded by the existing 5 s connect timeout unless the URL sets `connect_timeout` | Closing the pool waits for background connection attempts; an unbounded dial to a stopped database could exceed the shutdown budget (observed once under load) |

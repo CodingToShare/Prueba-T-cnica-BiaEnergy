@@ -11,7 +11,7 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phases 00–05 are Complete. Phase 04 passed an independent frontend/UX audit and is committed (`699da3f`); Phase 05 passed an independent explainability audit and awaits its checkpoint commit.
+Phases 00–05 are Complete and committed (Phase 04 `699da3f`, Phase 05 `dbfb945`, both independently audited). Phase 06 (quality, observability, delivery, demo) is Complete after its independent final audit and has its final local checkpoint. Remote push, GitHub-hosted CI and submission remain the owner's decisions.
 
 - **Phase 01:** the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import.
 - **Phase 02:** the pure deterministic anomaly engine `internal/analysis`.
@@ -20,7 +20,9 @@ Phases 00–05 are Complete. Phase 04 passed an independent frontend/UX audit an
 
 - **Phase 05:** the `ExplanationProvider` boundary with the deterministic provider (default and fallback) and an optional local Ollama provider (`internal/explanation`); explanations are generated during the run, validated, persisted with provenance and shown on the investigation page (`docs/ai/explainability.md`).
 
-Phase 06 (quality, observability, delivery, CI) is not authorized or started. Commands: `README.md`; data model: `docs/architecture/data-model.md`.
+- **Phase 06:** Prometheus `/metrics`, container images, the one-command Compose demo and reset, GitHub Actions CI, automated axe scans, the demo guide and the submission checklist (`docs/demo/`, `docs/delivery/`).
+
+Commands: `README.md`; data model: `docs/architecture/data-model.md`.
 
 ## How Agents Work Here
 
@@ -82,19 +84,22 @@ Microservices, brokers, Redis, Kubernetes, Elasticsearch, TimescaleDB, event sou
 
 ```text
 .agents/            agent context and skills (shared governance)
-.github/            Copilot entry point (CI workflows come in Phase 06)
+.github/            Copilot entry point and the CI workflow (workflows/ci.yml)
 data/input/         source CSVs (placed by a person; never modified)
 database/           migrations/ (goose, since Phase 01) and queries/ (sqlc, from Phase 03)
 docs/adr/           accepted architecture decisions
 docs/ai/            PRODUCT analytics and explainability design
 docs/architecture/  system architecture
+docs/delivery/      submission checklist
+docs/demo/          demo guide and technical talking points
 docs/design/        design contract + reference/design-system-v3.html (canonical visual sample)
 docs/performance/   data query strategy
 docs/phases/        roadmap and phase contracts/evidence
 docs/product/       requirements, rules, decisions, scope, traceability
 docs/quality/       Definition of Done
 docs/testing/       testing strategy
-src/backend/        Go module: cmd/api, cmd/migrate, cmd/seed, internal/* (since Phase 01)
+src/backend/        Go module: cmd/api, cmd/migrate, cmd/seed, cmd/healthcheck, internal/* (since Phase 01); Dockerfile
+compose.yaml        demo stack: PostgreSQL, migrate, seed, API, web (one command; architecture §13)
 src/frontend/       Next.js app (since Phase 04); Playwright journeys in src/frontend/e2e (TD-29)
 ```
 

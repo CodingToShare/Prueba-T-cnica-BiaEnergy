@@ -20,6 +20,7 @@ import (
 	"bia-energy.local/backend/internal/dashboard"
 	"bia-energy.local/backend/internal/meter"
 	"bia-energy.local/backend/internal/platform/health"
+	"bia-energy.local/backend/internal/platform/metrics"
 )
 
 // maxLoginBody bounds the login request body.
@@ -34,21 +35,29 @@ type Deps struct {
 	Anomalies *anomaly.Service
 	Dashboard *dashboard.Service
 	Runs      *analysisrun.Service
+	// Metrics is optional; with it the router records request metrics and
+	// serves GET /metrics.
+	Metrics *metrics.Metrics
 }
 
 type api struct{ Deps }
 
-// NewRouter builds the routes. Health and readiness stay public and outside
-// /api/v1; every /api/v1 route except login and logout needs a session.
+// NewRouter builds the routes. Health, readiness and metrics stay public and
+// outside /api/v1 (operational endpoints; restrict them at the network edge
+// in a real deployment); every /api/v1 route except login and logout needs a
+// session.
 func NewRouter(d Deps) http.Handler {
 	a := &api{Deps: d}
 	r := chi.NewRouter()
-	r.Use(withRequestID, requestLogger(d.Logger), recoverer(d.Logger))
+	r.Use(withRequestID, requestLogger(d.Logger, d.Metrics), recoverer(d.Logger))
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) { writeError(w, r, errNotFound) })
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) { writeError(w, r, errMethodNotAllowed) })
 
 	r.Get("/healthz", health.Liveness())
 	r.Get("/readyz", health.Readiness(d.DB, d.Logger))
+	if d.Metrics != nil {
+		r.Method(http.MethodGet, "/metrics", d.Metrics.Handler())
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(withTimeout)

@@ -25,6 +25,7 @@ import (
 	"bia-energy.local/backend/internal/explanation"
 	"bia-energy.local/backend/internal/httpapi"
 	"bia-energy.local/backend/internal/meter"
+	"bia-energy.local/backend/internal/platform/metrics"
 	"bia-energy.local/backend/internal/platform/postgres"
 )
 
@@ -91,6 +92,8 @@ func run(ctx context.Context, cfg config.APIConfig, logger *slog.Logger, onListe
 	if err != nil {
 		return err
 	}
+	appMetrics := metrics.New()
+	opts.Metrics = appMetrics
 	logger.Info("explanation provider configured", "provider", explainers.Settings.Provider, "model", explainers.Settings.Model, "prompt_version", explainers.Settings.PromptVersion)
 	runs, err := analysisrun.NewService(pool, engine, explainers, analysis.EngineVersion, engine.Config(), logger, opts)
 	if err != nil {
@@ -109,6 +112,7 @@ func run(ctx context.Context, cfg config.APIConfig, logger *slog.Logger, onListe
 		Handler: httpapi.NewRouter(httpapi.Deps{
 			Logger: logger, DB: pool, Auth: authManager, Runs: runs,
 			Meters: meter.NewService(pool), Anomalies: anomaly.NewService(pool), Dashboard: dashboard.NewService(pool),
+			Metrics: appMetrics,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

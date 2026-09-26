@@ -22,6 +22,7 @@ import (
 	"bia-energy.local/backend/internal/analysisrun"
 	"bia-energy.local/backend/internal/anomaly"
 	"bia-energy.local/backend/internal/explanation"
+	"bia-energy.local/backend/internal/platform/metrics"
 	"bia-energy.local/backend/internal/platform/postgres/pgtest"
 )
 
@@ -421,4 +422,54 @@ type providerFunc func(context.Context, analysisrun.ExplanationInput) (analysisr
 
 func (f providerFunc) Explain(ctx context.Context, in analysisrun.ExplanationInput) (analysisrun.Explanation, error) {
 	return f(ctx, in)
+}
+
+// Phase 06: run and explanation metrics reflect real lifecycle events. A
+// completed run is counted after its transaction, every explanation once,
+// fallbacks by sanitized code, and failed runs separately; no identifier is
+// ever a label.
+func TestRun_Metrics_CountRunsExplanationsAndFallbacks(t *testing.T) {
+	db := pgtest.StartSeeded(t)
+	m := metrics.New()
+	value := func(name string, labels map[string]string) float64 {
+		t.Helper()
+		v, _ := metrics.Value(m.Gatherer(), name, labels)
+		return v
+	}
+
+	requireCompleted(t, runOnce(t, db.Pool, newEngine(t), deterministicExplainers(), analysisrun.Options{Metrics: m}))
+	assert.Equal(t, 1.0, value("bia_analysis_runs_total", map[string]string{"status": "completed"}))
+	assert.Equal(t, 1.0, value("bia_analysis_findings", nil))
+	assert.Equal(t, 4.0, value("bia_explanation_generation_total", map[string]string{"provider": "deterministic", "outcome": "generated"}))
+	assert.Equal(t, 0.0, value("bia_analysis_runs_active", nil))
+
+	closed := httptest.NewServer(http.NotFoundHandler())
+	unreachable := closed.URL
+	closed.Close()
+	requireCompleted(t, runOnce(t, db.Pool, newEngine(t), ollamaExplainers(t, unreachable, 5*time.Second), analysisrun.Options{Metrics: m, ExplanationTimeout: time.Minute}))
+	assert.Equal(t, 2.0, value("bia_analysis_runs_total", map[string]string{"status": "completed"}))
+	assert.Equal(t, 4.0, value("bia_explanation_generation_total", map[string]string{"provider": "ollama", "outcome": "fallback"}))
+	assert.Equal(t, 4.0, value("bia_explanation_fallback_total", map[string]string{"fallback_code": analysisrun.FallbackProviderUnavailable}))
+	assert.Equal(t, 0.0, value("bia_explanation_generation_total", map[string]string{"provider": "ollama", "outcome": "generated"}))
+
+	failing := analyzerFunc(func(context.Context, []analysis.Reading, []analysis.Event) (analysis.Result, error) {
+		return analysis.Result{}, errors.New("engine exploded")
+	})
+	run := runOnce(t, db.Pool, failing, deterministicExplainers(), analysisrun.Options{Metrics: m})
+	assert.Equal(t, analysisrun.StatusFailed, run.Status)
+	assert.Equal(t, 1.0, value("bia_analysis_runs_total", map[string]string{"status": "failed"}))
+	assert.Equal(t, 2.0, value("bia_analysis_runs_total", map[string]string{"status": "completed"}), "a failed run is not counted as completed")
+	assert.Equal(t, 4.0, value("bia_explanation_generation_total", map[string]string{"provider": "deterministic", "outcome": "generated"}), "no explanation is requested for a failed analysis")
+	assert.Equal(t, 0.0, value("bia_analysis_runs_active", nil))
+
+	families, err := m.Gatherer().Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		for _, sample := range mf.GetMetric() {
+			for _, label := range sample.GetLabel() {
+				assert.NotRegexp(t, `M-1\d\d|^\d+$`, label.GetValue(), "%s{%s}", mf.GetName(), label.GetName())
+				assert.NotContains(t, []string{"meter_id", "analysis_id", "anomaly_id", "request_id", "model"}, label.GetName())
+			}
+		}
+	}
 }

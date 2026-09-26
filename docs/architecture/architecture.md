@@ -1,6 +1,6 @@
 # Architecture
 
-Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), the pure analysis engine (Phase 02), the product API with demo login, persisted analysis runs and background orchestration (Phase 03), the Next.js product UI (Phase 04), and the explanation providers with persisted, grounded explanations (Phase 05). Metrics, CI and delivery automation are Phase 06.
+Approved architecture for the Bia Energy Management Platform. Product behavior is governed by `docs/product/`; decisions by `docs/adr/`; analytics semantics by `docs/ai/`. This is the target the phases build toward. Implemented so far: the runtime, the source-data schema and ingestion (Phase 01), the pure analysis engine (Phase 02), the product API with demo login, persisted analysis runs and background orchestration (Phase 03), the Next.js product UI (Phase 04), the explanation providers with persisted, grounded explanations (Phase 05), and Prometheus metrics, container images, the one-command Compose delivery and CI (Phase 06, §13).
 
 ## 1. System Context
 
@@ -32,7 +32,7 @@ The dataset is small, the team is one, the deadline is three days, and no compon
 | Run orchestration (`internal/analysisrun`) | Queue and claim runs, load inputs from PostgreSQL, invoke the engine through the `Analyzer` boundary, obtain one explanation per finding through the `ExplanationProvider` boundary (with deterministic fallback), persist progress and results atomically | Make classification decisions; fail a run because an explanation provider failed |
 | Demo authentication (`internal/auth`) | One configured credential; signed session cookie (OD-12) | Store users, roles or sessions |
 | Explanation providers (`internal/explanation`) | Turn one finding and its evidence into operator text: deterministic templates (default and fallback) or a local Ollama model; prompt, output parsing and grounding validation | Change any computed value; be called when a finding is read |
-| Platform (`internal/platform`) | Database pool, migrations, generated queries, health, source/system JSON time; metrics in Phase 06. Configuration is `internal/config`; request error mapping is `internal/httpapi` | Hold product logic |
+| Platform (`internal/platform`) | Database pool, migrations, generated queries, health, source/system JSON time, Prometheus metrics (`internal/platform/metrics`, an application-owned registry). Configuration is `internal/config`; request error mapping is `internal/httpapi` | Hold product logic |
 | PostgreSQL | Integrity, filtering, sorting, aggregation | — |
 
 Backend package layout: ADR-002.
@@ -105,7 +105,7 @@ Status `QUEUED → RUNNING → COMPLETED | FAILED`. Stage `QUEUED → LOADING_DA
 
 ## 7. API
 
-Versioned under `/api/v1` and described by the canonical OpenAPI 3.1 contract [`docs/api/openapi.yaml`](../api/openapi.yaml) (TD-03). A test keeps it consistent with the router. Operational endpoints (`/healthz`, `/readyz`; `/metrics` in Phase 06) sit outside the versioned product API and are public. Every `/api/v1` route except login and logout needs the demo session cookie. Errors use one JSON body (`error.code`, `error.message`, `error.request_id`); no stack traces or internals. JSON is snake_case. Source times are written without an offset and system instants as RFC 3339 UTC.
+Versioned under `/api/v1` and described by the canonical OpenAPI 3.1 contract [`docs/api/openapi.yaml`](../api/openapi.yaml) (TD-03). A test keeps it consistent with the router. Operational endpoints (`/healthz`, `/readyz`, `/metrics`) sit outside the versioned product API and are public. Every `/api/v1` route except login and logout needs the demo session cookie. Errors use one JSON body (`error.code`, `error.message`, `error.request_id`); no stack traces or internals. JSON is snake_case. Source times are written without an offset and system instants as RFC 3339 UTC.
 
 ## 8. Persistence
 
@@ -115,7 +115,7 @@ Relational tables for meters, readings, events (Phase 01, see [data model](data-
 
 - Structured JSON logs via `slog` with request id, route, status, duration; analysis runs log stage transitions with run id; explanation generation logs provider, model, duration and sanitized fallback code per finding (never prompts, responses or event descriptions).
 - `GET /healthz` (process alive) and `GET /readyz` (database reachable).
-- Prometheus-compatible `/metrics`: HTTP request counts/latency, analysis run duration and outcome, explanation provider fallbacks.
+- Prometheus `/metrics` (namespace `bia`, application-owned registry): counters `http_requests_total{method,route,status_class}`, `analysis_runs_total{status}`, `explanation_generation_total{provider,outcome}` and `explanation_fallback_total{fallback_code}`; histograms `http_request_duration_seconds{method,route}`, `analysis_run_duration_seconds{status}`, `analysis_findings` and `explanation_generation_duration_seconds{provider}`; gauge `analysis_runs_active`; Go runtime and process metrics. HTTP labels use route templates, and unmatched paths share one label. For the findings histogram, `_count` is the number of completed runs observed and `_sum` is their total number of findings (one four-finding run produces `_count 1` and `_sum 4`). Completed runs are counted after their transaction commits. No identifier or model name is a label. There are no dashboards or alerting in the MVP.
 - No tracing stack in the MVP.
 
 ## 10. Failure Handling Direction
@@ -141,3 +141,14 @@ Intentionally minimal authentication for the challenge (OD-12): one configured d
 | Multiple sites/customers | Tenant scoping in schema and API; real identity provider |
 
 Each requires measured need and a new ADR.
+
+## 13. Delivery
+
+`compose.yaml` is the single delivery file. One command (`docker compose up --build -d --wait`) starts `postgres` (healthy) → `migrate` (one-shot, completes) → `seed` (one-shot, imports the supplied CSVs, idempotent) → `api` (healthy on `/readyz`) → `web` (healthy). Dependency conditions order the stack; there are no sleeps. `docker compose down -v --remove-orphans` resets the demo database.
+
+- **Backend image** (`src/backend/Dockerfile`): a multi-stage static Go build (`CGO_ENABLED=0`) on `gcr.io/distroless/static-debian12:nonroot`. One image serves every command (`api`, `migrate`, `seed`, and `healthcheck` for the container health probe) and carries the migrations and the supplied CSVs. It runs as a non-root user with no shell or package manager.
+- **Frontend image** (`src/frontend/Dockerfile`): a frozen `pnpm install` and Next.js standalone build; the runtime keeps only the traced server files and static assets on `node:24-alpine` (package managers removed), running as `node`. `BACKEND_URL` (the `api` service) is a build argument because Next.js serializes the rewrite target at build time; nothing server-side reaches browser code.
+- **Configuration:** local-demo defaults in `compose.yaml`, overridable by environment or `.env` (`.env.example`). Published ports are bound to `127.0.0.1`. The explanation provider defaults to deterministic. Optional Ollama runs on the host and is reached at `host.docker.internal`; it is never part of the stack.
+- **CI** (`.github/workflows/ci.yml`): backend static checks, unit tests and sqlc drift; frontend type drift, lint, types, tests and build; integration tests; real-stack Playwright; and the Compose delivery path with the containerized golden path and axe. No secrets and no model are needed.
+
+Where production would differ (not built): managed PostgreSQL with backups, published and signed images, HTTPS termination, a real identity provider, restricted operational endpoints, dashboards and alerts on the existing metrics, and an orchestrator if horizontal scaling were ever required.
