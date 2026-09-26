@@ -1,7 +1,7 @@
 # Phase 06 — Quality + Observability + Delivery + Demo
 
 - Status: **Complete** (independent final audit: ready with non-blocking notes; final local checkpoint created with the owner's separate authorization)
-- Authorization: explicitly authorized by the user, together with the Phase 05 checkpoint commit; the final local checkpoint was authorized separately after the audit. Push, remote, tag, PR and release are not authorized.
+- Authorization: explicitly authorized by the user, together with the Phase 05 checkpoint commit; the final local checkpoint was authorized separately after the audit. Push, remote, tag, PR and release were not authorized by the phase; the first publication was authorized separately afterwards (see Remote Publication), and tag, PR and release remain unauthorized.
 - Date: 2026-09-25
 - Phase 05 checkpoint: local commit `dbfb945` "feat: add grounded AI explanation providers" (author Santiago Forero, `Phase 05:` body, no trailer; not pushed).
 
@@ -156,13 +156,21 @@ These are identical to Phase 02–05, with 155,250.85 kWh for 12 meters and 4,03
 | Tests with the implementation (metrics unit/HTTP/integration, axe, delivery smoke) | Done; all green |
 | Regression Phases 01–05 | Backend unit, integration and race; frontend; E2E: all green |
 | Clean-environment and README rehearsal | Done (Windows host: PowerShell and Bash) |
-| CI | Configured; every constituent command validated locally; **no GitHub Actions run** (not pushed) |
+| CI | Configured; every constituent command validated locally; **no job has started on GitHub** (account billing lock, see Remote Publication) |
 | Docs and traceability | Updated; the only open row is FR-DEL-001's live demo presentation by the owner |
-| Commit | Not created (by instruction) |
+| Commit | Final local checkpoint `dbc3a8b`, created with the owner's separate authorization after the audit |
+
+## Remote Publication
+
+With the owner's separate authorization, the repository was published after the Phase 06 checkpoint and the governance commit `3ea7814`:
+
+- Repository: https://github.com/CodingToShare/Prueba-T-cnica-BiaEnergy (public, default branch `main`). The local branch was renamed from `master` to `main`, and one push without force created `main` at `3ea7814`, tracking `origin/main`. No tag, release or pull request was created.
+- Before the push, a review of all 276 tracked files found no `.env`, credentials, build output, test artifacts, database files or model files; the only env files are the two `.env.example` templates with local-demo values.
+- GitHub Actions run `36208094299` (workflow `ci`, event push, head `3ea7814`) created all five jobs, and GitHub refused to start each one: "The job was not started because your account is locked due to a billing issue." No runner was assigned and zero steps executed. This is an account/infrastructure block, not a failing test or workflow step, and CI is **not** reported as passing. The remediation is to clear the billing lock and rerun; no code or workflow change is indicated.
 
 ## Known Limitations And Deferred Work
 
-- The CI workflow has not executed on GitHub.
+- No GitHub Actions job has executed yet (account billing lock); remote CI remains to be validated once billing is resolved.
 - The 5–10 minute demo is presented by the owner at submission; the guide and a timed rehearsal of the flow exist.
 - Clean-room validation ran on this Windows machine (with Docker's module/pnpm cache mounts available), not on a separate clean machine; Linux was exercised only through the containers and the race run.
 - Optional Ollama from Docker was validated on Docker Desktop for Windows only.
@@ -171,4 +179,4 @@ These are identical to Phase 02–05, with 155,250.85 kWh for 12 meters and 4,03
 
 ## Next Phase
 
-None. The roadmap ends at Phase 06; any push, tag, release or pull request requires explicit owner authorization.
+None. The roadmap ends at Phase 06; any further push, CI rerun, tag, release or pull request requires explicit owner authorization.

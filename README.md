@@ -177,7 +177,7 @@ Interview-style rationale for these decisions: [demo guide § Technical talking 
 - Operational endpoints are unauthenticated; plain HTTP on localhost (`SESSION_COOKIE_SECURE=false` only for this reason).
 - Optional Ollama explanations vary by model and run. Grounding checks reject many failures but cannot prove every phrase; the structured evidence remains the reference.
 - Single API process by design (ADR-009); no horizontal scaling, dashboards or alerting are provided.
-- The CI workflow is configured and its commands are validated locally; it has not run on GitHub because this repository has not been pushed.
+- The CI workflow is configured and every job's commands were validated locally. The repository is published, but GitHub has not started any CI job so far: the first run (push of `3ea7814`) created all five jobs and refused to start them because the account's GitHub Actions billing is locked, so zero steps ran. No remote CI result exists yet.
 
 ## Repository And Documentation
 

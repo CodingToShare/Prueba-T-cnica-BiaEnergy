@@ -11,7 +11,7 @@ Demo flow (5–10 minutes): `Login → Dashboard → Meters → Meter Detail →
 
 ## Current Phase
 
-Phases 00–05 are Complete and committed (Phase 04 `699da3f`, Phase 05 `dbfb945`, both independently audited). Phase 06 (quality, observability, delivery, demo) is Complete after its independent final audit and has its final local checkpoint. Remote push, GitHub-hosted CI and submission remain the owner's decisions.
+Phases 00–05 are Complete and committed (Phase 04 `699da3f`, Phase 05 `dbfb945`, both independently audited). Phase 06 (quality, observability, delivery, demo) is Complete after its independent final audit and has its final local checkpoint. The repository is published at https://github.com/CodingToShare/Prueba-T-cnica-BiaEnergy (branch `main`). GitHub-hosted CI has not started any job yet because the account's Actions billing is locked; the owner demo and submission remain the owner's decisions.
 
 - **Phase 01:** the Go module (`cmd/api`, `cmd/migrate`, `cmd/seed`), the PostgreSQL schema for meters, readings and events, and the verified idempotent import.
 - **Phase 02:** the pure deterministic anomaly engine `internal/analysis`.

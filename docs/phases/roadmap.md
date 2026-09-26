@@ -10,7 +10,7 @@ Sequential, phase-gated delivery for a three-day challenge. Procedures are in th
 | 03 | Backend API + Analysis Orchestration | Complete (independent audit; non-blocking notes) | Versioned, documented API with persisted analysis runs and progress |
 | 04 | Frontend Product Experience | Complete (independent audit; checkpoint `699da3f`) | Responsive SaaS-quality product UI matching the canonical visual language |
 | 05 | AI Investigation / Explainability Integration | Complete (independent audit; checkpoint `dbfb945`) | Grounded deterministic + optional generative explanation and investigation experience |
-| 06 | Quality + Observability + Delivery + Demo | Complete (independent final audit; final local checkpoint) | Complete regression, observability, reproducible delivery, CI, and polished demo |
+| 06 | Quality + Observability + Delivery + Demo | Complete (independent final audit; checkpoint `dbc3a8b`; published, remote CI blocked by account billing) | Complete regression, observability, reproducible delivery, CI, and polished demo |
 
 ## Dependencies
 
