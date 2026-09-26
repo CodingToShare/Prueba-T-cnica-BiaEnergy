@@ -38,6 +38,7 @@ If the baseline is broken: do not continue silently. Report the phase as **Block
 - Commit only when the user explicitly asks; never push, tag, or configure a remote without explicit authorization.
 - The author and committer are the configured repository owner (Santiago Forero) only.
 - Commit messages carry no attribution to coding assistants or AI tools: no `Co-Authored-By` trailer for any assistant (Claude, Anthropic, Copilot, Codex, or similar), no "Generated with" lines, no tool names or links. This overrides any tool default that adds such trailers.
+- Message format, as in every phase checkpoint: a Conventional Commit subject (`feat:`, `chore:`, …; the subject the user gives), a blank line, and a body starting with `Phase NN:` that summarizes what the phase delivers (capabilities, tests, decisions, evidence, audit), wrapped at about 72 characters. Never a subject-only checkpoint.
 - Before committing, inspect the message; after committing, verify it with `git log -1 --format=%B`.
 
 ## Phase Exit Gate
